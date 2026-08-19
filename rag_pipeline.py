@@ -9,7 +9,7 @@ import sqlite3
 from dotenv import load_dotenv
 from datetime import datetime
 import secrets
-
+from litellm.exceptions import AuthenticationError
 embedder=SentenceTransformer("all-MiniLM-L6-v2")
 db_path="app.db"
 load_dotenv()
@@ -29,7 +29,7 @@ def init_db():
         name       TEXT,
         api_key     TEXT,
         model            TEXT,
-        share_link_token     TEXT
+        share_link_token     TEXT UNIQUE
         );
 
         CREATE TABLE IF NOT EXISTS courses (
@@ -113,9 +113,9 @@ def embedding(chunks):
         c["vector"]=embedder.encode(c["text"]).tolist()
     return chunks
 
-def store_to_db(chunks,Collection,course_id):
+def store_to_db(chunks,Collection,course_id, file_id):
     Collection.upsert(
-        ids=[ f"{course_id}_chunk_{i}" for i in range(len(chunks)) ],
+        ids=[ f"{course_id}_{file_id}_chunk_{i}" for i in range(len(chunks)) ],
         embeddings=[i["vector"] for i in chunks],
         documents=[i["text"] for i in chunks],
         metadatas=[{"page": i["page"], "course_id": course_id} for i in chunks]
@@ -129,13 +129,19 @@ def retrieve(question,k,Collection,embedder,course_id):
     return results
 
 
-def get_msg(question,k,llm,collection,embedder,api_key):
-    full=""
-    for piece in answer(question,k,llm,collection,embedder,api_key):
-        full+=piece
-    return full
 
 
+def create_conversation(professor_id, course_id, title):
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO conversations (professor_id, course_id, title, created_at) VALUES (?, ?, ?, ?)",
+        (professor_id, course_id, title, datetime.now().isoformat())
+    )
+    chat_id = cur.lastrowid          # <- the newly created chat's id
+    conn.commit()
+    conn.close()
+    return chat_id
 
 
 
@@ -208,3 +214,78 @@ def create_professor(name,api_key,model):
     conn.close()
     return professor_id,token
 
+def get_professor_by_token(token):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute(
+        "SELECT professor_id,api_key,model FROM professors WHERE share_link_token=?",(token,)
+    )
+    row=cur.fetchone()
+    conn.close()
+    return row
+
+def get_user_chats(professor_id):
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT chat_id, title FROM conversations WHERE professor_id = ? ORDER BY created_at DESC", (professor_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return rows      # [(1, "Hashing questions"), (2, "Trees"), ...]
+
+def rotate_token(professor_id):
+    new_token=secrets.token_urlsafe(32)
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("UPDATE professors SET share_link_token=? WHERE professor_id=?",(new_token,professor_id))
+    conn.commit()
+    conn.close()
+    return new_token
+
+def get_professor_courses(prof_id):
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT course_id, title FROM courses WHERE professor_id = ?",
+        (prof_id,)
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def get_professor_for_chat(chat_id):
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT p.api_key, p.model
+        FROM conversations c
+        JOIN professors p ON c.professor_id = p.professor_id
+        WHERE c.chat_id = ?
+    """, (chat_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row      # (api_key, model)
+
+
+
+
+
+def validate_key(api_key, model):
+    try:
+        completion(
+            model=model,
+            api_key=api_key,
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=1              # keep it tiny/cheap
+        )
+        return True
+    except AuthenticationError:
+        return False
+    except Exception:
+        return False                  # any other failure = treat as invalid
+#STEPS TO DO
+#Professor scoping in retrieval — add professor_id to the metadata filter so one professor's students never see another's courses (you have course_id filtering; add the professor layer).
+#The share-token flow — create_professor mints a token; get_professor_by_token resolves a link to a professor's id/key/model.
+#The web layer — this is the big one. Wrap your functions as endpoints: an upload/ingest endpoint for professors, a chat endpoint for students that streams over HTTP. Your streaming generator drops right into this. This is where it stops being a terminal script and becomes a real app with the public link.
+#The student interface — the actual page students land on via the link (anonymous, pick a course, chat).
+#Before going public — encrypt the stored API key, add per-link rate limiting, allow token rotation.
