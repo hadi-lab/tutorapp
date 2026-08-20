@@ -22,25 +22,28 @@ from rag_pipeline import (
     get_professor_courses,
     validate_key
 )
+app=Flask(__name__)
+from rag_pipeline import embedder, collection, openai_key, db_path
+k=8
 
-def add_file_to_course(pdf, course_id, collection):
+def add_file_to_course(pdf, course_id, collection,file_id):
     pages = extract_pages(pdf)
     chunks = chunking(pages)
     embedded = embedding(chunks)
-    store_to_db(embedded, collection, course_id)    
+    store_to_db(embedded, collection, course_id,file_id)    
     return len(embedded)
 
 def ingest_course_files(files,prof_id,collection,course_title):
     course_id=create_course(course_title,prof_id)
+    os.makedirs(f"./uploads/{prof_id}", exist_ok=True)
     for file in files:
         file_id=os.path.splitext(file.filename)[0]
         path=f"./uploads/{prof_id}/{file.filename}"
         file.save(path)
-        add_file_to_course(path,course_id,collection)
+        add_file_to_course(path,course_id,collection,file_id)
+    return course_id
 
-from rag_pipeline import embedder, collection, openai_key, db_path
-k=8
-app=Flask(__name__)
+
 
 @app.route("/chat",methods=["POST"])
 def ask_endpoint():
@@ -48,8 +51,8 @@ def ask_endpoint():
     chat_id=request.json["chat_id"]
     course_id=request.json["course_id"]
     prof=get_professor_for_chat(chat_id)
-    api_key=prof["api_key"]
-    llm=prof["model"]
+    api_key = prof[0]      
+    llm = prof[1] 
     def generate():
         full=""
         for piece in answer(question, k, chat_id, llm, collection, embedder, api_key, course_id):
@@ -70,7 +73,33 @@ def professor_route():
     prof_id,token=create_professor(data["name"],data["api_key"],data["model"])
     return jsonify({"professor_id": prof_id, "share_token": token})
 
-@app.route("/upload",methods=["POST"])
+@app.route("/ingest",methods=["POST"])
 def upload():
     prof_id=request.form["prof_id"]
+    course_title=request.form["course_title"]
+    material=request.files.getlist("files")
+    course_id=ingest_course_files(material,prof_id,collection,course_title)
+    return jsonify({"course_id":course_id})
+
+@app.route("/tutor/<token>",methods=["GET"])
+def landing(token):
+    prof=get_professor_by_token(token)
+    if prof is None:
+        return jsonify({"error": "invalid link"}), 404
     
+    prof_id=prof[0]
+    course_rows=get_professor_courses(prof_id)
+    course_list=[{"course_id":c[0],"title":c[1]} for c in course_rows]
+    return jsonify({"professor_id":prof_id,"courses":course_list})
+
+@app.route("/create_convo",methods=["POST"])
+def create_convo():
+    course_id=request.json["course_id"]
+    prof_id=request.json["professor_id"]
+    chat_id=create_conversation(prof_id,course_id, "New chat")
+    return jsonify({"chat_id":chat_id})
+
+
+
+init_db()
+app.run(debug=True)
