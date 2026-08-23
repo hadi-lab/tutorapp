@@ -26,6 +26,8 @@ def init_db():
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS professors (
         professor_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE,
+        hashed_pass TEXT,
         name       TEXT,
         api_key     TEXT,
         model            TEXT,
@@ -40,14 +42,21 @@ def init_db():
         FOREIGN KEY (professor_id) REFERENCES professors(professor_id)
         );
 
+        CREATE TABLE IF NOT EXISTS students (
+            student_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            email          TEXT UNIQUE,
+            password_hash  TEXT
+        );
+
+
         CREATE TABLE IF NOT EXISTS conversations (
             chat_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-            professor_id     INTEGER,
+            student_id   INTEGER,
             course_id   INTEGER,
             title       TEXT,
             created_at  TEXT,
-            FOREIGN KEY (course_id) REFERENCES courses(course_id),
-            FOREIGN KEY (professor_id) REFERENCES professors(professor_id)
+            FOREIGN KEY (student_id) REFERENCES students(student_id),
+            FOREIGN KEY (course_id) REFERENCES courses(course_id)
         );
         
 
@@ -63,7 +72,16 @@ def init_db():
     conn.commit()
     conn.close()
 
-
+def delete_course(course_id,prof_id):
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("""DELETE FROM messages WHERE chat_id IN
+                (SELECT chat_id FROM conversations WHERE course_id = ?)""", (course_id,))
+    cur.execute("DELETE FROM conversations WHERE course_id = ?", (course_id,))
+    cur.execute("DELETE FROM courses WHERE course_id = ? AND professor_id=?", (course_id,prof_id))
+    conn.commit()
+    conn.close()
+    collection.delete(where={"course_id": course_id})
 def save_messages(chat_id,role,content):
     conn=sqlite3.connect(db_path)
     cur=conn.cursor()
@@ -93,7 +111,7 @@ def extract_pages(pdf):
     reader=PdfReader(pdf)
     for i, page in enumerate(reader.pages):
         page_text=page.extract_text()
-        if page:
+        if page_text:
             pages.append({
                 "text":page_text,"page": i + 1
             })
@@ -131,14 +149,14 @@ def retrieve(question,k,Collection,embedder,course_id):
 
 
 
-def create_conversation(professor_id, course_id, title):
+def create_conversation(student_id, course_id, title):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO conversations (professor_id, course_id, title, created_at) VALUES (?, ?, ?, ?)",
-        (professor_id, course_id, title, datetime.now().isoformat())
+        "INSERT INTO conversations (student_id, course_id, title, created_at) VALUES (?, ?, ?, ?)",
+        (student_id, course_id, title, datetime.now().isoformat())
     )
-    chat_id = cur.lastrowid          # <- the newly created chat's id
+    chat_id = cur.lastrowid          
     conn.commit()
     conn.close()
     return chat_id
@@ -182,14 +200,6 @@ def ask(question,chat_id,llm,k,collection,embedder,api_key,course_id):
     save_messages(chat_id, "user", question)   
     save_messages(chat_id, "assistant", full)
 
-def ingest_course(pdf,prof_id,Collection):
-    title = os.path.splitext(os.path.basename(pdf))[0] 
-    pages=extract_pages(pdf)
-    chunks=chunking(pages)
-    embedded_chunks=embedding(chunks)
-    course_id=create_course(title,prof_id)
-    store_to_db(embedded_chunks,Collection,course_id)
-    return course_id
 
 def create_course(title,prof_id):
     conn = sqlite3.connect(db_path)
@@ -201,13 +211,13 @@ def create_course(title,prof_id):
     return course_id 
 
 
-def create_professor(name,api_key,model):
+def create_professor(name,email,hashed_pass,api_key,model):
     token=secrets.token_urlsafe(32)
     conn=sqlite3.connect(db_path)
     cur=conn.cursor()
     cur.execute(
-            "INSERT INTO professors(name,api_key,model,share_link_token) VALUES (?,?,?,?)",
-            (name,api_key,model,token)
+            "INSERT INTO professors(name,email,hashed_pass,api_key,model,share_link_token) VALUES (?,?,?,?,?,?)",
+            (name,email,hashed_pass,api_key,model,token)
     )
     professor_id=cur.lastrowid
     conn.commit()
@@ -224,10 +234,10 @@ def get_professor_by_token(token):
     conn.close()
     return row
 
-def get_user_chats(professor_id):
+def get_user_chats(student_id):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT chat_id, title FROM conversations WHERE professor_id = ? ORDER BY created_at DESC", (professor_id,))
+    cur.execute("SELECT chat_id, title FROM conversations WHERE student_id = ? ORDER BY created_at DESC", (student_id,))
     rows = cur.fetchall()
     conn.close()
     return rows      # [(1, "Hashing questions"), (2, "Trees"), ...]
@@ -252,19 +262,20 @@ def get_professor_courses(prof_id):
     conn.close()
     return rows
 
-
 def get_professor_for_chat(chat_id):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute("""
         SELECT p.api_key, p.model
         FROM conversations c
-        JOIN professors p ON c.professor_id = p.professor_id
+        JOIN courses co ON c.course_id = co.course_id
+        JOIN professors p ON co.professor_id = p.professor_id
         WHERE c.chat_id = ?
     """, (chat_id,))
     row = cur.fetchone()
     conn.close()
-    return row      # (api_key, model)
+    return row
+
 
 
 

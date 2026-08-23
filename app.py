@@ -1,4 +1,4 @@
-from flask import Flask,request, Response, jsonify
+from flask import Flask,request, Response, jsonify,render_template
 import os
 from rag_pipeline import (
     init_db,
@@ -11,6 +11,7 @@ from rag_pipeline import (
     retrieve,
     create_conversation,
     answer,
+    delete_course,
     get_professor_for_chat,
     ask,
     ingest_course,
@@ -44,7 +45,6 @@ def ingest_course_files(files,prof_id,collection,course_title):
     return course_id
 
 
-
 @app.route("/chat",methods=["POST"])
 def ask_endpoint():
     question=request.json["question"]
@@ -72,6 +72,25 @@ def professor_route():
     
     prof_id,token=create_professor(data["name"],data["api_key"],data["model"])
     return jsonify({"professor_id": prof_id, "share_token": token})
+
+@app.route("/signup")
+def sign_up_page():
+    return render_template("prof_signup.html")
+
+@app.route("/professor_courses",methods=["GET"])
+def professor_courses():
+    prof_id=request.args.get("prof_id")
+    course_rows=get_professor_courses(prof_id)
+    course_list=[{"course_id":c[0],"course_title":c[1]} for c in course_rows]
+    return jsonify({"courses":course_list})
+
+@app.route("/delete_courses",methods=["POST"])
+def delete_course():
+    course_id=request.json["course_id"]
+    prof_id=request.json["prof_id"]
+    delete_course(course_id,prof_id)
+    return jsonify({"status":"deleted"})
+
 
 @app.route("/ingest",methods=["POST"])
 def upload():
