@@ -11,13 +11,9 @@
 {% endblock %}
 {% block scripts %}
     <script>
-        const prof_id=localStorage.getItem("prof_id");
-        if(!prof_id){
-            window.location.href="/signup"
-        }
+
         async function uploadcourse(){
             const formdata= new FormData()
-            formdata.append("prof_id",prof_id)
             formdata.append("course_title",document.getElementById("course_title").value)
 
             const files=document.getElementById("files").files;
@@ -37,7 +33,7 @@
         };
 
             window.onload=async function(){
-                const response=await fetch("/professor_courses?prof_id="+prof_id)
+                const response=await fetch("/professor_courses")
                 const data= await response.json();
                 for(const course of data.courses){
                     document.getElementById("course_list").innerHTML+= "<li>"+course.title+"(ID:"+course.course_id+ ")</li>"

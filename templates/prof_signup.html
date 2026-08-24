@@ -2,6 +2,8 @@
 {% block title %}Sign up{% endblock %}
 {% block content %}
     <input id="name" placeholder="Name">
+    <input id="name" type="email" placeholder="email">
+    <input id="name" type="password" placeholder="password">
     <input id="api_key" placeholder="api key">
     <input id="model" placeholder="model">
     <button onclick="submitProfessor()" >Sign up</button>
@@ -16,11 +18,13 @@
             }
 
             async function submitProfessor(){
-                const response =await fetch("/professor",{
+                const response =await fetch("/professor_signup",{
                     method:"POST",
                     headers:{"Content-Type":"application/json"},
                     body:JSON.stringify({
                         name:document.getElementById("name").value,
+                        email:document.getElementById("email").value,
+                        password:document.getElementById("password").value,
                         api_key:document.getElementById("api_key").value,
                         model:document.getElementById("model").value
                     })

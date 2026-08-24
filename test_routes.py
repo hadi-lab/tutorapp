@@ -1,42 +1,56 @@
 import requests
-
+import time
+email = f"hadi{int(time.time())}@test.com"
 BASE = "http://127.0.0.1:5000"
 
-# 1. create a professor
-r = requests.post(f"{BASE}/professor", json={
+# ---- Test 1: protected route WITHOUT logging in (should be blocked) ----
+r = requests.get(f"{BASE}/professor_courses")     # fresh request, no session
+print("NO AUTH:", r.status_code, r.json())        # expect 401 "not logged in"
+
+# ---- Test 2: full flow WITH a session ----
+s = requests.Session()      # <- persists cookies across all calls made with `s`
+
+# signup (sets the session cookie on `s`)
+r = s.post(f"{BASE}/professor_signup", json={
     "name": "Hadi",
-    "api_key": "",   # paste your real key, or load from .env
+    "email": email,
+    "password": "mypassword",
+    "api_key": "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",       # real key, or load from .env
     "model": "gpt-4o"
 })
-print("PROFESSOR:", r.status_code, r.json())
-prof_id = r.json()["professor_id"]
-token = r.json()["share_token"]
+print("SIGNUP:", r.status_code)
+print(r.text) 
 
-# 2. upload a course (note: field names must match the route — prof_id, course_title, files)
-r = requests.post(f"{BASE}/ingest",
-    data={"prof_id": prof_id, "course_title": "Hashing"},
+# now protected routes work, because `s` carries the session cookie
+
+# ingest a course (no prof_id sent — comes from session)
+r = s.post(f"{BASE}/ingest",
+    data={"course_title": "Hashing"},
     files=[("files", open("Hashing.pdf", "rb"))]
 )
 print("INGEST:", r.status_code, r.json())
 course_id = r.json()["course_id"]
 
-# 3. landing — resolve the token
-r = requests.get(f"{BASE}/tutor/{token}")
-print("LANDING:", r.status_code, r.json())
+# list courses (prof_id from session)
+r = s.get(f"{BASE}/professor_courses")
+print("COURSES:", r.status_code, r.json())
 
-# 4. create a conversation (note: this route uses professor_id, not prof_id)
-r = requests.post(f"{BASE}/create_convo", json={
-    "professor_id": prof_id,
-    "course_id": course_id
+# ---- Test 3: login as returning professor (new session) ----
+s2 = requests.Session()
+r = s2.post(f"{BASE}/professor_login", json={
+    "email": email,
+    "password": "mypassword"
 })
-print("CONVO:", r.status_code, r.json())
-chat_id = r.json()["chat_id"]
+print("LOGIN:", r.status_code, r.json())
 
-# 5. chat
-r = requests.post(f"{BASE}/chat", json={
-    "question": "what is double hashing?",
-    "chat_id": chat_id,
-    "course_id": course_id
+# s2 is now logged in — protected routes work
+r = s2.get(f"{BASE}/professor_courses")
+print("COURSES AFTER LOGIN:", r.status_code, r.json())
+
+# ---- Test 4: wrong password (should fail) ----
+s3 = requests.Session()
+r = s3.post(f"{BASE}/professor_login", json={
+    "email": email,
+    "password": "wrongpassword"
 })
-print("CHAT:", r.status_code)
-print(r.text)
+print("WRONG PASSWORD:", r.status_code, r.json())   # expect 401

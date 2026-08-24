@@ -146,6 +146,21 @@ def retrieve(question,k,Collection,embedder,course_id):
     results=Collection.query(query_embeddings=[q_vector],n_results=k,where={"course_id": course_id})
     return results
 
+def get_students_by_email(email):
+    conn=sqlite3.connect()
+    cur=conn.cursor()
+    cur.execute("SELECT student_id,password_hash FROM students WHERE email = ?",(email,))
+    row=cur.fetchone()
+    conn.close()
+    return row
+
+def get_prof_by_email(email):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("SELECT professor_id,hashed_pass FROM professors WHERE  email=? ",(email,))
+    row=cur.fetchone()
+    conn.close()
+    return row
 
 
 
@@ -210,6 +225,15 @@ def create_course(title,prof_id):
     conn.close()
     return course_id 
 
+
+def create_student(email,password_hash):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("INSERT INTO students(email,password_hash) VALUES (?,?)",(email,password_hash))
+    student_id=cur.lastrowid
+    conn.commit()
+    conn.close()
+    return student_id
 
 def create_professor(name,email,hashed_pass,api_key,model):
     token=secrets.token_urlsafe(32)
