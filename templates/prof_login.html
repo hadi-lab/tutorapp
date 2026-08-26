@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}log in{% endblock %}
+{% block content %}
+    <input type="email" placeholder="email" id="email">
+    <input type="password" placeholder="password" id="password">
+    <button onclick="loginprof()" > log in</button>
+    <div id="results" ></div>
+{% endblock %}
+{% block scripts %}
+    <script>
+        async function loginprof() {
+            const response= await fetch("/professor_login",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    email:document.getElementById("email").value,
+                    password:document.getElementById("password").value
+                })
+            })
+            const data= await response.json
+            if(response.status === 200){
+                window.location.href="/professor_dashboard"
+            }
+            else{
+                document.getElementById("results").innerHTML= data.error;
+            }
+        }
+    </script>
+{% endblock %}

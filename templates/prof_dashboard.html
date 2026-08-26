@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}course ingestion{% endblock %}
+{% block content %}
+    <div id="logout" >
+        <button onclick="logout()" >logout</button>
+    </div>
+    <p>Your current running token:</p>
+    <div id="running_token"></div>
+    <h3>your share link:</h3>
+    <div id="share_link" ></div>
+
+
+    <button onclick="rotatetoken()" >rotate ur token?</button>
+
+    <h3>your ingested courses:</h3>
+    <ul id="course_list" ></ul>
+
+
+    <h3>Add a course:</h3>
+    <input id="course_title" placeholder="course title">
+    <input id="files"  type="file" multiple>
+    <button onclick="uploadcourse()" >upload course</button>
+
+    
+    
+    <h3>delete a Course:</h3>
+    <input  name="course_id" id="course_id" placeholder="course_id">
+    <button onclick="deletecourse()" >Delete course</button>
+    <div id="deletion_result" ></div>
+
+{% endblock %}
+{% block scripts %}
+    <script>
+        async function deletecourse() {
+            if(confirm("Are you sure you want to  delete this course? This cannot be undone")){
+                const response=await fetch("/delete_courses",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    course_id:document.getElementById("course_id").value
+                })
+            })
+            const data=await response.json()
+            document.getElementById("deletion_result").innerHTML=data.status
+            }
+            else{
+                return;
+            }
+            
+        }
+
+        async function rotatetoken() {
+            if(confirm("Are u sure u wanna rotate ur token?Your current share link will stop working and you'll get a new one.")){
+                const response=await fetch("/rotate_token",{ method: "POST" })
+                const data=await response.json()
+                document.getElementById("running_token").innerHTML=data.new_token
+                document.getElementById("share_link").innerHTML="<p> http://myapp.com/tutor/"+data.new_token +" </p>"
+            }
+            else{return;}
+            
+        }
+
+        async function uploadcourse(){
+            const formdata= new FormData()
+            formdata.append("course_title",document.getElementById("course_title").value)
+
+            const files=document.getElementById("files").files;
+            for(let i =0;i<files.length;i++){
+                formdata.append("files",files[i]);
+            }
+            const response= await fetch("/ingest",{
+                method:"POST",
+            body:formdata
+            });
+            const data=await response.json()
+            document.getElementById("course_list").innerHTML+= "<li>Created: "+document.getElementById("course_title").value+"(ID:"+data.course_id+")</li>";
+
+            document.getElementById("course_title").value="";
+            document.getElementById("files").value="";
+            
+        };
+        async function logout() {
+            await fetch("/logout",{method:"POST"})
+            window.location.href="/prof_login_render"
+            
+        }
+
+            window.onload=async function(){
+                const [r1,r2]=await Promise.all([
+                    fetch("/professor_courses"),fetch("/show_prof_token")
+                ])
+                const data= await r1.json();
+                for(const course of data.courses){
+                    document.getElementById("course_list").innerHTML+= "<li>"+course.title+"(ID:"+course.course_id+ ")</li>"
+
+                }
+                const data2=await r2.json()
+                document.getElementById("running_token").innerHTML="<p>"+data2.token +" </p>"
+                document.getElementById("share_link").innerHTML="<p> http://myapp.com/tutor/"+data2.token +" </p>"
+            };
+        
+    </script>
+{% endblock %}

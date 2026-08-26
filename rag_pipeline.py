@@ -162,7 +162,13 @@ def get_prof_by_email(email):
     conn.close()
     return row
 
-
+def get_token_by_prof_id(prof_id):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("SELECT share_link_token FROM professors WHERE professor_id =?",(prof_id,))
+    row=cur.fetchone()
+    conn.close()
+    return row[0] if row else None
 
 def create_conversation(student_id, course_id, title):
     conn = sqlite3.connect(db_path)
