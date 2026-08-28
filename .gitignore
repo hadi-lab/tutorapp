@@ -5,3 +5,5 @@ __pycache__/
 chroma_db/
 chroma/
 *.db
+test_routes.py
+test.py

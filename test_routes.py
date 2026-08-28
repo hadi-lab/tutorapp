@@ -15,7 +15,7 @@ r = s.post(f"{BASE}/professor_signup", json={
     "name": "Hadi",
     "email": email,
     "password": "mypassword",
-    "api_key": "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",       # real key, or load from .env
+    "api_key": "",       # real key, or load from .env
     "model": "gpt-4o"
 })
 print("SIGNUP:", r.status_code)
