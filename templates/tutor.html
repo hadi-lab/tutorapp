@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}course select{% endblock %}
+
+{% block content %}
+<div id="course_select" >
+    
+    <div id="sidebar" >
+        <h3>courses</h3>
+        <ul id="course_list" >
+            {% for c in courses %}
+            <li><button onclick="startchat({{c.course_id}})" >{{c.title}}</button></li>
+            {% endfor %}
+        </ul>
+        <h3>your past chats</h3>
+        <ul id="history_list" ></ul>
+
+        <button onclick="logout()" >logout</button>
+    </div>
+    <div id="chat_area" >
+        <div id="messages" ></div>
+        <input id="question" placeholder="Ask a question...">
+        <button onclick="sendMessage()" >send</button>
+    </div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+    <script>
+        let currentChatId = null;      
+        let currentCourseId = null; 
+        async function pick_course(Course_id){
+            const response=await fetch("/pick_course",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    course_id:Course_id
+                })
+            })
+            const data= await response.json()
+            currentChatId=data.chat_id;
+            currentCourseId=Course_id;
+            document.getElementById("messages").innerHTML=""
+            
+        }
+        async function sendmessage() {
+            if(!currentChatId){return;}
+            const question=doc.getElementById("question").value;
+            document.getElementById("question").value="";
+            const messagesdiv=document.getElementById("messages");
+            messagesdiv.innerHTML+="<div class='user'>"+question+"</div>"
+
+
+            const response= await fetch("/chat",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    question:question,
+                    chat_id:currentChatId,
+                    course_id:currentCourseId,
+                })
+            })
+            const answerdiv=document.createElement("div")
+            answerdiv.className="assistant"
+            messagesdiv.appendChild(answerdiv)
+            const reader=response.body.reader()
+            const decoder=new TextDecoder()
+            while(true){
+                const{done,value}=await reader.read()
+                if(done){break;}
+                const chunk=decoder.decode(value)
+                answerdiv.innerHTML+=chunk
+            }
+        }
+        window.onload= async function(){
+            const response=await fetch("/mychats")
+            const data=await response.json()
+            for(const chat in data.chats){
+                document.getElementById("history_list").innerHTML +="<li><button onclick='openChat(" + chat.chat_id + "," + chat.course_id + ")'>" +
+                    chat.title + " (" + chat.course_title + ")</button></li>";
+            }
+        }
+
+
+        async function openChat(chat_id, course_id) {
+            currentChatId = chat_id;
+            currentCourseId = course_id;
+            const response = await fetch("/load_chat/" + chat_id);
+            const data = await response.json();
+            const messagesDiv = document.getElementById("messages");
+            messagesDiv.innerHTML = "";
+            for (const msg of data.messages) {
+                messagesDiv.innerHTML += "<div class='" + msg.role + "'>" + msg.content + "</div>";
+        }
+    }
+    </script>
+{% endblock %}

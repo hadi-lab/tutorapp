@@ -105,6 +105,26 @@ def get_history(chat_id):
     conn.close()
     return rows
 
+def course_belongs_to_prof(course_id,prof_id):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("""
+        SELECT 1 FROM courses WHERE professor_id=? AND course_id=?
+        """,(prof_id,course_id))
+    row=cur.fetchone()
+    conn.close()
+    return row is not None
+
+
+
+
+def chat_belong_to_student(chat_id,s_id):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("SELECT 1 FROM conversations WHERE chat_id=? AND student_id=?",(chat_id,s_id))
+    row=cur.fetchone()
+    conn.close()
+    return row is not None
 
 def extract_pages(pdf):
     pages=[]
@@ -170,12 +190,12 @@ def get_token_by_prof_id(prof_id):
     conn.close()
     return row[0] if row else None
 
-def create_conversation(student_id, course_id, title):
+def create_conversation(student_id, course_id):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO conversations (student_id, course_id, title, created_at) VALUES (?, ?, ?, ?)",
-        (student_id, course_id, title, datetime.now().isoformat())
+        (student_id, course_id, None, datetime.now().isoformat())
     )
     chat_id = cur.lastrowid          
     conn.commit()
@@ -267,10 +287,15 @@ def get_professor_by_token(token):
 def get_user_chats(student_id):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT chat_id, title FROM conversations WHERE student_id = ? ORDER BY created_at DESC", (student_id,))
+    cur.execute("""
+            SELECT c.chat_id,c.title,c.course_id,co.title  FROM  conversations c
+            JOIN courses co ON c.course_id=co.course_id
+            WHERE c.student_id=? AND c.title IS NOT NULL
+            ORDER BY c.created_at DESC
+            """,(student_id,))
     rows = cur.fetchall()
     conn.close()
-    return rows      # [(1, "Hashing questions"), (2, "Trees"), ...]
+    return rows
 
 def rotate_token(professor_id):
     new_token=secrets.token_urlsafe(32)
@@ -306,8 +331,20 @@ def get_professor_for_chat(chat_id):
     conn.close()
     return row
 
+def get_title(c_id):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("SELECT title FROM courses WHERE course_id=?",(c_id,))
+    row=cur.fetchone
+    conn.close()
+    return row[0] if row else None
 
-
+def insert_title(title,chat_id):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("UPDATE conversations SET title=? WHERE chat_id=?",(title,chat_id))
+    conn.commit()
+    conn.close()
 
 
 

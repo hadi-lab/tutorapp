@@ -2,30 +2,7 @@ from flask import Flask,request, Response, jsonify,render_template,session,redir
 import os
 import sqlite3
 
-from rag_pipeline import (
-    init_db,
-    save_messages,
-    get_history,
-    extract_pages,
-    chunking,
-    embedding,
-    store_to_db,
-    retrieve,
-    create_conversation,
-    answer,
-    delete_course,
-    get_professor_for_chat,
-    ask,
-    create_course,
-    create_professor,
-    create_student,
-    get_professor_by_token,
-    get_user_chats,
-    rotate_token,
-    get_professor_courses,
-    validate_key,
-    get_students_by_email,get_prof_by_email,get_token_by_prof_id
-)
+import rag_pipeline as rp
 from dotenv import load_dotenv
 
 from werkzeug.security import check_password_hash,generate_password_hash
@@ -54,14 +31,14 @@ def prof_required(f):
         return f(*args, **kwargs)
     return wrapper
 def add_file_to_course(pdf, course_id, collection,file_id):
-    pages = extract_pages(pdf)
-    chunks = chunking(pages)
-    embedded = embedding(chunks)
-    store_to_db(embedded, collection, course_id,file_id)    
+    pages = rp.extract_pages(pdf)
+    chunks = rp.chunking(pages)
+    embedded = rp.embedding(chunks)
+    rp.store_to_db(embedded, collection, course_id,file_id)    
     return len(embedded)
 
 def ingest_course_files(files,prof_id,collection,course_title):
-    course_id=create_course(course_title,prof_id)
+    course_id=rp.create_course(course_title,prof_id)
     os.makedirs(f"./uploads/{prof_id}", exist_ok=True)
     for file in files:
         file_id=os.path.splitext(file.filename)[0]
@@ -77,18 +54,50 @@ def ask_endpoint():
     question=request.json["question"]
     chat_id=request.json["chat_id"]
     course_id=request.json["course_id"]
-    prof=get_professor_for_chat(chat_id)
+    history=rp.get_history(chat_id)
+    if len(history) == 0:
+        rp.insert_title(question[:40],chat_id)
+    prof=rp.get_professor_for_chat(chat_id)
     api_key = prof[0]      
     llm = prof[1] 
     def generate():
         full=""
-        for piece in answer(question, k, chat_id, llm, collection, embedder, api_key, course_id):
+        for piece in rp.answer(question, k, chat_id, llm, collection, embedder, api_key, course_id):
             full+=piece
             yield piece
         
-        save_messages(chat_id,"user",question)
-        save_messages(chat_id,"assistant",full)
+        rp.save_messages(chat_id,"user",question)
+        rp.save_messages(chat_id,"assistant",full)
     return Response(generate(),mimetype="text/plain")
+
+
+@app.route("/my_chats")
+@student_required
+def get_chats():
+    rows=rp.get_user_chats(session["student_id"])
+    chats=[{"chat_id":c[0],"title":c[1],"course_id":c[2],"course_title":c[3]}for c in rows]
+    return jsonify({"chats":chats})
+
+@app.route("/pick_course",methods=["POST"])
+@student_required
+def pick_course():
+    prof_id=session.get("current_prof_id")
+    data=request.json
+    if not rp.course_belongs_to_prof(data["course_id"],prof_id):
+        return jsonify({"error": "invalid course"}), 403
+    s_id=session["student_id"]
+    chat_id=rp.create_conversation(s_id,data["course_id"])
+    return jsonify({"chat_id":chat_id})
+
+
+@app.route("/load_chat/<chat_id>",methods=["GET"])
+@student_required
+def load_chat(chat_id):
+    if not rp.chat_belong_to_student(chat_id,session["student_id"]):
+        return jsonify({"error":"not your chat"}),403
+    rows=rp.get_history(chat_id)
+    messages=[{"role":c[0],"content":c[1]} for c in rows]
+    return jsonify({"messages":messages})
 
 
 @app.route("/tutor/<token>",methods=["GET"])
@@ -96,12 +105,13 @@ def landing(token):
     if "student_id" not in session:
         session["pending_token"]=token
         return redirect(url_for("student_login_page"))
-    prof=get_professor_by_token(token)
+    prof=rp.get_professor_by_token(token)
     if prof is None:
         return jsonify({"error": "invalid link"}), 404
     
     prof_id=prof[0]
-    course_rows=get_professor_courses(prof_id)
+    session["current_prof_id"] = prof_id
+    course_rows=rp.get_professor_courses(prof_id)
     course_list=[{"course_id":c[0],"title":c[1]} for c in course_rows]
     return render_template("tutor.html",courses=course_list)
 
@@ -112,7 +122,7 @@ def student_route():
     data=request.json
     password=generate_password_hash(data["password"])
     try:
-        id=create_student(data["email"],password)
+        id=rp.create_student(data["email"],password)
     except sqlite3.IntegrityError:
         return jsonify({"error": "email already registered"}), 400
     session["student_id"]=id
@@ -125,7 +135,7 @@ def s_login():
     if "pending_token"not in session:
         return jsonify({"error": "please use your professor's link to log in"}), 400
     data=request.json
-    student=get_students_by_email(data["email"])
+    student=rp.get_students_by_email(data["email"])
     if not student:
         return jsonify({"error": "no account with that email"}),401
     if not check_password_hash(student[1],data["password"]):
@@ -152,11 +162,11 @@ def student_signup_page():
 @app.route("/professor_signup",methods=["POST"])
 def professor_route():
     data=request.json
-    if not validate_key(data["api_key"],data["model"]):
+    if not rp.validate_key(data["api_key"],data["model"]):
         return jsonify({"error":"invalid key or model"}),400
     password=generate_password_hash(data["password"])
     try:
-        prof_id,token=create_professor(data["name"],data["email"],password,data["api_key"],data["model"])
+        prof_id,token=rp.create_professor(data["name"],data["email"],password,data["api_key"],data["model"])
     except sqlite3.IntegrityError:
         return jsonify({"error": "email already registered"}), 400
     session["prof_id"]=prof_id
@@ -174,19 +184,19 @@ def prof_login_page():
 @prof_required
 def show_prof_token():
     prof_id=session["prof_id"]
-    prof_token=get_token_by_prof_id(prof_id)
+    prof_token=rp.get_token_by_prof_id(prof_id)
     return jsonify({"token":prof_token})
 
 @app.route("/rotate_token", methods=["POST"])
 @prof_required
 def rotate_prof_token():
-    new_token=rotate_token(session["prof_id"])
+    new_token=rp.rotate_token(session["prof_id"])
     return jsonify({"new_token":new_token})
 
 @app.route("/professor_login",methods=["POST"])
 def p_login():
     data=request.json
-    prof=get_prof_by_email(data["email"])
+    prof=rp.get_prof_by_email(data["email"])
     if not  prof:
         return jsonify({"error": "no account with that email"}),401
     if not check_password_hash(prof[1],data["password"]):
@@ -198,8 +208,8 @@ def p_login():
 @prof_required
 def professor_courses():
     prof_id=session["prof_id"]
-    course_rows=get_professor_courses(prof_id)
-    course_list=[{"course_id":c[0],"course_title":c[1]} for c in course_rows]
+    course_rows=rp.get_professor_courses(prof_id)
+    course_list=[{"course_id":c[0],"title":c[1]} for c in course_rows]
     return jsonify({"courses":course_list})
 
 @app.route("/delete_courses",methods=["POST"])
@@ -207,7 +217,7 @@ def professor_courses():
 def delete_course_route():
     course_id=request.json["course_id"]
     prof_id=session["prof_id"]
-    delete_course(course_id,prof_id)
+    rp.delete_course(course_id,prof_id)
     return jsonify({"status":"deleted"}),200
 
 
@@ -224,18 +234,11 @@ def upload():
 def dashboard_render():
     return render_template("prof_dashboard.html")
 
-@app.route("/create_convo",methods=["POST"])
-@student_required
-def create_convo():
-    course_id=request.json["course_id"]
-    student_id=session["student_id"]
-    chat_id=create_conversation(student_id,course_id, "New chat")
-    return jsonify({"chat_id":chat_id})
 
 @app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
     return jsonify({"status": "logged out"})
 
-init_db()
+rp.init_db()
 app.run(debug=True)
