@@ -170,7 +170,7 @@ def professor_route():
     except sqlite3.IntegrityError:
         return jsonify({"error": "email already registered"}), 400
     session["prof_id"]=prof_id
-    return jsonify({"professor_id": prof_id})
+    return jsonify({"redirect":url_for("prof_dashboard_render")})
 
 @app.route("/prof_signup_render")
 def prof_signup_page():
@@ -202,7 +202,7 @@ def p_login():
     if not check_password_hash(prof[1],data["password"]):
         return jsonify({"error": "wrong password"}),401
     session["prof_id"]=prof[0]
-    return jsonify({"status":"logged in"}),200
+    return jsonify({"redirect":url_for("prof_dashboard_render")}),200
 
 @app.route("/professor_courses",methods=["GET"])
 @prof_required
@@ -231,7 +231,7 @@ def upload():
     return jsonify({"course_id":course_id})
 
 @app.route("/professor_dashboard")
-def dashboard_render():
+def prof_dashboard_render():
     return render_template("prof_dashboard.html")
 
 

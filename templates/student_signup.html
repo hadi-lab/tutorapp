@@ -10,18 +10,26 @@
 {% block scripts %}
     <script>
         async function set_student(){
-            const response=await fetch("/student_signup",{
-
+            let response;
+            try{
+                response=await fetch("/student_signup",{
                 method:"POST",
                 headers:{"Content-Type":"application/json"},
                 body:JSON.stringify({
                     email:document.getElementById("email").value,
                     password:document.getElementById("password").value
                 })
-                }
-            )
+            })
+            }
+            
+            catch(e){
+                document.getElementById("result").innerHTML="Connection problem,please try again."
+                return;
+            }
+                
             const data= await response.json()
-            if(data.redirect){
+            
+            if( response.status===200  ||data.redirect){
                 window.location.href=data.redirect
             }
             else{

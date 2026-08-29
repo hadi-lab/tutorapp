@@ -8,7 +8,7 @@
         <h3>courses</h3>
         <ul id="course_list" >
             {% for c in courses %}
-            <li><button onclick="startchat({{c.course_id}})" >{{c.title}}</button></li>
+            <li><button onclick="pick_course({{c.course_id}})" >{{c.title}}</button></li>
             {% endfor %}
         </ul>
         <h3>your past chats</h3>
@@ -19,7 +19,7 @@
     <div id="chat_area" >
         <div id="messages" ></div>
         <input id="question" placeholder="Ask a question...">
-        <button onclick="sendMessage()" >send</button>
+        <button onclick="sendmessage()" >send</button>
     </div>
 
 </div>
@@ -29,13 +29,31 @@
         let currentChatId = null;      
         let currentCourseId = null; 
         async function pick_course(Course_id){
-            const response=await fetch("/pick_course",{
+            let response;
+            try{
+                response=await fetch("/pick_course",{
                 method:"POST",
                 headers:{"Content-Type":"application/json"},
                 body:JSON.stringify({
                     course_id:Course_id
                 })
-            })
+                })
+            }
+            catch(e){
+                document.getElementById("messages").innerHTML="Connection error,please try again."
+                return;
+            }
+            if (response.status === 403) {
+                document.getElementById("messages").innerHTML = "That course isn't available.";
+                return;
+                }   
+            if(response.status===401){
+                window.location.href="/student_login_page"
+                return;
+            }
+
+            
+            
             const data= await response.json()
             currentChatId=data.chat_id;
             currentCourseId=Course_id;
@@ -44,13 +62,14 @@
         }
         async function sendmessage() {
             if(!currentChatId){return;}
-            const question=doc.getElementById("question").value;
+            const question=document.getElementById("question").value;
             document.getElementById("question").value="";
             const messagesdiv=document.getElementById("messages");
             messagesdiv.innerHTML+="<div class='user'>"+question+"</div>"
-
-
-            const response= await fetch("/chat",{
+            messagesdiv.scrollTop = messagesdiv.scrollHeight;
+            let response;
+            try{
+                response= await fetch("/chat",{
                 method:"POST",
                 headers:{"Content-Type":"application/json"},
                 body:JSON.stringify({
@@ -59,22 +78,43 @@
                     course_id:currentCourseId,
                 })
             })
+            }
+            catch(e){
+                messagesdiv.innerHTML += "<div class='error'>Connection problem,your message didn't send.Please try again.</div>"
+                return;
+            }
+            if(response.status===401){
+                window.location.href="/student_login_page"
+                return;
+            }
             const answerdiv=document.createElement("div")
             answerdiv.className="assistant"
             messagesdiv.appendChild(answerdiv)
-            const reader=response.body.reader()
+            const reader=response.body.getReader()
             const decoder=new TextDecoder()
             while(true){
                 const{done,value}=await reader.read()
                 if(done){break;}
                 const chunk=decoder.decode(value)
                 answerdiv.innerHTML+=chunk
+                messagesdiv.scrollTop = messagesdiv.scrollHeight;
             }
         }
         window.onload= async function(){
-            const response=await fetch("/mychats")
+            let response;
+            try{
+                response=await fetch("/my_chats")
+            }
+            catch(e){
+                document.getElementById("history_list").innerHTML="Connection error,please refresh to load your history"
+                return;
+            }
+            if(response.status===401){
+                window.location.href="/student_login_page"
+                return;
+            }
             const data=await response.json()
-            for(const chat in data.chats){
+            for(const chat of data.chats){
                 document.getElementById("history_list").innerHTML +="<li><button onclick='openChat(" + chat.chat_id + "," + chat.course_id + ")'>" +
                     chat.title + " (" + chat.course_title + ")</button></li>";
             }
@@ -84,13 +124,29 @@
         async function openChat(chat_id, course_id) {
             currentChatId = chat_id;
             currentCourseId = course_id;
-            const response = await fetch("/load_chat/" + chat_id);
+            let response;
+            try{
+                response = await fetch("/load_chat/" + chat_id);
+            }
+            catch(e){
+                document.getElementById("messages").innerHTML="connection error,please try again"
+                return;
+            }
+            if (response.status === 403) {
+                document.getElementById("messages").innerHTML = "That chat isn't available.";
+                return;
+                }   
+            if(response.status===401){
+                window.location.href="/student_login_page"
+                return;
+            }
             const data = await response.json();
             const messagesDiv = document.getElementById("messages");
             messagesDiv.innerHTML = "";
             for (const msg of data.messages) {
                 messagesDiv.innerHTML += "<div class='" + msg.role + "'>" + msg.content + "</div>";
-        }
+            }
+            messagesdiv.scrollTop = messagesdiv.scrollHeight;
     }
     </script>
 {% endblock %}

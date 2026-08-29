@@ -10,7 +10,9 @@
 {% block scripts %}
     <script>
         async function log_in() {
-            const response=await fetch("/student_login",{
+            let response;
+            try{
+                const response=await fetch("/student_login",{
 
                 method:"POST",
                 headers:{"Content-Type":"application/json"},
@@ -19,8 +21,13 @@
                     password:document.getElementById("password").value
                 })
             })
+            }
+            catch(e){
+                document.getElementById("result").innerHTML="Connection problem,please try again"
+                return;
+            }
             const data=await response.json()
-            if(data.redirect){
+            if( response.status===200 ||data.redirect){
                 window.location.href=data.redirect
             }
             else{

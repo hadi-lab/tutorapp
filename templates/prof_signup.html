@@ -14,12 +14,11 @@
 
 {% block scripts %}
         <script>
-            function copylink(){
-                navigator.clipboard.writeText(document.getElementById("linkbox").value)
-            }
 
             async function submitProfessor(){
-                const response =await fetch("/professor_signup",{
+                let response;
+                try{
+                    response =await fetch("/professor_signup",{
                     method:"POST",
                     headers:{"Content-Type":"application/json"},
                     body:JSON.stringify({
@@ -30,12 +29,19 @@
                         model:document.getElementById("model").value
                     })
                 });
+                }
+                catch(e){
+                    document.getElementById("results").innerHTML="Connection problem,please try again"
+                    return;
+                }
+                
                 const data=await response.json();
-                localStorage.setItem("prof_id", data.professor_id);
-                localStorage.setItem("share_token", data.share_token); 
-                let prof_id=data.professor_id;
-                const link="http://myapp.com/tutor/" + data.share_token;
-                document.getElementById("results").innerHTML="Your link : <input id='linkbox' value='"+ link +"' readonly>"  +"<button onclick='copylink()'> Copy </button>";
+                if(response.status===200 || data.redirect){
+                    window.location.href=data.redirect
+                }
+                else{
+                    document.getElementById("results").innerHTML= data.error;
+                }
             }
         </script>
 {% endblock %}
