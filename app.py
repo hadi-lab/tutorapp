@@ -48,7 +48,7 @@ def ingest_course_files(files,prof_id,collection,course_title):
     return course_id
 
 
-@app.route("/chat",methods=["POST"])
+@app.route("/api/chat",methods=["POST"])
 @student_required
 def ask_endpoint():
     question=request.json["question"]
@@ -71,14 +71,14 @@ def ask_endpoint():
     return Response(generate(),mimetype="text/plain")
 
 
-@app.route("/my_chats")
+@app.route("/api/my_chats")
 @student_required
 def get_chats():
     rows=rp.get_user_chats(session["student_id"])
     chats=[{"chat_id":c[0],"title":c[1],"course_id":c[2],"course_title":c[3]}for c in rows]
     return jsonify({"chats":chats})
 
-@app.route("/pick_course",methods=["POST"])
+@app.route("/api/pick_course",methods=["POST"])
 @student_required
 def pick_course():
     prof_id=session.get("current_prof_id")
@@ -90,7 +90,7 @@ def pick_course():
     return jsonify({"chat_id":chat_id})
 
 
-@app.route("/load_chat/<chat_id>",methods=["GET"])
+@app.route("/api/load_chat/<chat_id>",methods=["GET"])
 @student_required
 def load_chat(chat_id):
     if not rp.chat_belong_to_student(chat_id,session["student_id"]):
@@ -100,11 +100,11 @@ def load_chat(chat_id):
     return jsonify({"messages":messages})
 
 
-@app.route("/tutor/<token>",methods=["GET"])
+@app.route("/api/tutor/<token>",methods=["GET"])
 def landing(token):
     if "student_id" not in session:
         session["pending_token"]=token
-        return redirect(url_for("student_login_page"))
+        return jsonify({"redirect":"/StudentLogin"})
     prof=rp.get_professor_by_token(token)
     if prof is None:
         return jsonify({"error": "invalid link"}), 404
@@ -115,7 +115,7 @@ def landing(token):
     course_list=[{"course_id":c[0],"title":c[1]} for c in course_rows]
     return render_template("tutor.html",courses=course_list)
 
-@app.route("/student_signup",methods=["POST"])
+@app.route("/api/student_signup",methods=["POST"])
 def student_route():
     if "pending_token" not in session:
         return jsonify({"error": "please use your professor's link to sign up"}), 400
@@ -127,10 +127,10 @@ def student_route():
         return jsonify({"error": "email already registered"}), 400
     session["student_id"]=id
     token=session.pop("pending_token")
-    return jsonify({"redirect": url_for("landing", token=token)})
+    return jsonify({"redirect":"/tutor/" + token})
 
 
-@app.route("/student_login",methods=["POST"])
+@app.route("/api/student_login",methods=["POST"])
 def s_login():
     if "pending_token"not in session:
         return jsonify({"error": "please use your professor's link to log in"}), 400
@@ -143,23 +143,15 @@ def s_login():
     session["student_id"]=student[0]
     
     token=session.pop("pending_token")
-    return jsonify({"redirect": url_for("landing", token=token)})
+    return jsonify({"redirect":"/tutor/" + token})
     
 
-@app.route("/student_login_page")
-def student_login_page():
-    return render_template("student_login.html")
-
-
-@app.route("/student_signup_page")
-def student_signup_page():
-    return render_template("student_signup.html")
 
 
 
 
 
-@app.route("/professor_signup",methods=["POST"])
+@app.route("/api/professor_signup",methods=["POST"])
 def professor_route():
     data=request.json
     if not rp.validate_key(data["api_key"],data["model"]):
@@ -172,28 +164,22 @@ def professor_route():
     session["prof_id"]=prof_id
     return jsonify({"redirect":url_for("prof_dashboard_render")})
 
-@app.route("/prof_signup_render")
-def prof_signup_page():
-    return render_template("prof_signup.html")
 
-@app.route("/prof_login_render")
-def prof_login_page():
-    return render_template("prof_login.html")
 
-@app.route("/show_prof_token")
+@app.route("/api/show_prof_token")
 @prof_required
 def show_prof_token():
     prof_id=session["prof_id"]
     prof_token=rp.get_token_by_prof_id(prof_id)
     return jsonify({"token":prof_token})
 
-@app.route("/rotate_token", methods=["POST"])
+@app.route("/api/rotate_token", methods=["POST"])
 @prof_required
 def rotate_prof_token():
     new_token=rp.rotate_token(session["prof_id"])
     return jsonify({"new_token":new_token})
 
-@app.route("/professor_login",methods=["POST"])
+@app.route("/api/professor_login",methods=["POST"])
 def p_login():
     data=request.json
     prof=rp.get_prof_by_email(data["email"])
@@ -204,7 +190,7 @@ def p_login():
     session["prof_id"]=prof[0]
     return jsonify({"redirect":url_for("prof_dashboard_render")}),200
 
-@app.route("/professor_courses",methods=["GET"])
+@app.route("/api/professor_courses",methods=["GET"])
 @prof_required
 def professor_courses():
     prof_id=session["prof_id"]
@@ -212,7 +198,7 @@ def professor_courses():
     course_list=[{"course_id":c[0],"title":c[1]} for c in course_rows]
     return jsonify({"courses":course_list})
 
-@app.route("/delete_courses",methods=["POST"])
+@app.route("/api/delete_courses",methods=["POST"])
 @prof_required
 def delete_course_route():
     course_id=request.json["course_id"]
@@ -221,7 +207,7 @@ def delete_course_route():
     return jsonify({"status":"deleted"}),200
 
 
-@app.route("/ingest",methods=["POST"])
+@app.route("/api/ingest",methods=["POST"])
 @prof_required
 def upload():
     prof_id=session["prof_id"]  
@@ -230,12 +216,10 @@ def upload():
     course_id=ingest_course_files(material,prof_id,collection,course_title)
     return jsonify({"course_id":course_id})
 
-@app.route("/professor_dashboard")
-def prof_dashboard_render():
-    return render_template("prof_dashboard.html")
 
 
-@app.route("/logout", methods=["POST"])
+
+@app.route("/api/logout", methods=["POST"])
 def logout():
     session.clear()
     return jsonify({"status": "logged out"})
