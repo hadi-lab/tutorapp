@@ -206,15 +206,38 @@ def create_conversation(student_id, course_id):
 
 
 def answer(question, k, chat_id, llm, Collection, embedder, api_key, course_id):
-    results=retrieve(question, k, Collection, embedder, course_id)
+    history=get_history(chat_id)
+    retrieval_query = question
+    if history:
+        recent_user_msgs = [content for role, content in history if role == "user"][-2:]
+        if recent_user_msgs:
+            retrieval_query = " ".join(recent_user_msgs) + " " + question
+
+
+    results=retrieve(retrieval_query, k, Collection, embedder, course_id)
     chunks=results["documents"][0]
     pages = results["metadatas"][0]
     context="\n\n".join(
         f"[slide {p['page']}] {text} " for text, p in zip(chunks , pages)
     )
-    system_prompt= "Answer the question using only the provided context. If the answer isn't in the context, say so."
+    system_prompt = """You are a knowledgeable and patient tutor for this specific course. Your role is to help students understand the course material.
 
-    history=get_history(chat_id)
+            GROUNDING:
+            - Base your answers on the provided context from the course materials. This is your source of truth.
+            - You may explain, rephrase, simplify, give examples, and draw connections between concepts in the context to aid understanding.
+            - If the context doesn't cover something the student asks, say so honestly, but still try to be helpful — offer to explain related concepts that ARE in the material, or help them rephrase their question.
+            - Do not state facts as course content if they aren't supported by the context. If you add general knowledge to help, make it clear that's supplementary.
+
+            TEACHING STYLE:
+            - Explain clearly and at a level appropriate for a student learning the material.
+            - When asked to simplify, use analogies or plain language.
+            - Be encouraging and conversational, not robotic.
+            - For greetings or casual messages, respond naturally and warmly, then invite course questions.
+
+            STAY ON TOPIC:
+            - Gently redirect off-topic requests back to the course material.
+            - You are a tutor for this course, not a general assistant."""
+    
 
     messages=[{"role":"system","content":system_prompt }]
     

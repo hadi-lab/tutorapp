@@ -104,7 +104,7 @@ def load_chat(chat_id):
 def landing(token):
     if "student_id" not in session:
         session["pending_token"]=token
-        return jsonify({"redirect":"/StudentLogin"})
+        return jsonify({"redirect":"/student_login"}),401
     prof=rp.get_professor_by_token(token)
     if prof is None:
         return jsonify({"error": "invalid link"}), 404
@@ -113,7 +113,7 @@ def landing(token):
     session["current_prof_id"] = prof_id
     course_rows=rp.get_professor_courses(prof_id)
     course_list=[{"course_id":c[0],"title":c[1]} for c in course_rows]
-    return render_template("tutor.html",courses=course_list)
+    return jsonify({"courses":course_list})
 
 @app.route("/api/student_signup",methods=["POST"])
 def student_route():
@@ -162,7 +162,7 @@ def professor_route():
     except sqlite3.IntegrityError:
         return jsonify({"error": "email already registered"}), 400
     session["prof_id"]=prof_id
-    return jsonify({"redirect":url_for("prof_dashboard_render")})
+    return jsonify({"redirect":"/professor_dashboard"})
 
 
 
@@ -188,7 +188,7 @@ def p_login():
     if not check_password_hash(prof[1],data["password"]):
         return jsonify({"error": "wrong password"}),401
     session["prof_id"]=prof[0]
-    return jsonify({"redirect":url_for("prof_dashboard_render")}),200
+    return jsonify({"redirect":"/professor_dashboard"}),200
 
 @app.route("/api/professor_courses",methods=["GET"])
 @prof_required

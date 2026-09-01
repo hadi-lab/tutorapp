@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link,useNavigate } from 'react-router-dom'
 function ProfLogin(){
     const [email,setEmail]=useState("")
     const [password,setPassword]=useState("")
     const [Result,setResult]=useState("")
+    const navigate = useNavigate()
 
     async function handleLogin() {
         let response;
-        const navigate = useNavigate()
         try{
             response=await fetch("/api/professor_login",{
                 method:"POST",

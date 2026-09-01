@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate} from 'react-router-dom'
 function ProfessorSignup() {
   // one state per field
   const [name, setName] = useState("")
@@ -8,10 +8,10 @@ function ProfessorSignup() {
   const [apiKey, setApiKey] = useState("")
   const [model, setModel] = useState("")
   const [result, setResult] = useState("")     // for showing success/error messages
+  const navigate = useNavigate()
 
   async function handleSubmit() {
     let response;
-    const navigate = useNavigate()
     try {
       response = await fetch("/api/professor_signup", {
         method: "POST",
