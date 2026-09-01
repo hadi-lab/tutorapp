@@ -1,1 +1,0 @@
-/student_login_page
