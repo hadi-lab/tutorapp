@@ -48,6 +48,7 @@ def ingest_course_files(files,prof_id,collection,course_title):
     return course_id
 
 
+
 @app.route("/api/chat",methods=["POST"])
 @student_required
 def ask_endpoint():
@@ -132,14 +133,15 @@ def student_route():
 
 @app.route("/api/student_login",methods=["POST"])
 def s_login():
-    if "pending_token"not in session:
-        return jsonify({"error": "please use your professor's link to log in"}), 400
+    
     data=request.json
     student=rp.get_students_by_email(data["email"])
     if not student:
         return jsonify({"error": "no account with that email"}),401
     if not check_password_hash(student[1],data["password"]):
         return jsonify({"error":"wrong password"}),401
+    if "pending_token"not in session:
+        return jsonify({"error": "please use your professor's link to log in"}), 400
     session["student_id"]=student[0]
     
     token=session.pop("pending_token")
@@ -206,6 +208,33 @@ def delete_course_route():
     rp.delete_course(course_id,prof_id)
     return jsonify({"status":"deleted"}),200
 
+@app.route("/api/delete_chat",methods=["POST"])
+@student_required
+def delete_chat():
+    data=request.json
+    s_id=session["student_id"]
+    chat_id=data["chat_id"]
+
+    if not rp.chat_belong_to_student(chat_id,s_id):
+        return jsonify({"error":"not ur chat"}),403
+    rp.delete_chat(s_id,chat_id)
+    return jsonify({"status":"deleted"}),200
+
+
+@app.route("/api/update_title",methods=["POST"])
+@student_required
+def update_title():
+    data=request.json
+    chat_id=data["chat_id"]
+    title = data["title"].strip()
+
+    if not rp.chat_belong_to_student(chat_id,session["student_id"]):
+            return jsonify({"error":"not ur chat"}),403
+    if not title.strip(): return jsonify({"error": "empty title"})
+    if len(title) > 30:
+        return jsonify({"error": "title too long"}), 400
+    rp.insert_title(title,chat_id)
+    return jsonify({"status":"success"})
 
 @app.route("/api/ingest",methods=["POST"])
 @prof_required

@@ -167,7 +167,7 @@ def retrieve(question,k,Collection,embedder,course_id):
     return results
 
 def get_students_by_email(email):
-    conn=sqlite3.connect()
+    conn=sqlite3.connect(db_path)
     cur=conn.cursor()
     cur.execute("SELECT student_id,password_hash FROM students WHERE email = ?",(email,))
     row=cur.fetchone()
@@ -369,6 +369,13 @@ def insert_title(title,chat_id):
     conn.commit()
     conn.close()
 
+def delete_chat(s_id,chat_id):
+    conn=sqlite3.connect(db_path)
+    cur=conn.cursor()
+    cur.execute(" DELETE FROM messages WHERE chat_id=?",(chat_id,))
+    cur.execute(" DELETE FROM conversations WHERE chat_id=?",(chat_id,))
+    conn.commit()
+    conn.close()
 
 
 def validate_key(api_key, model):
@@ -384,9 +391,3 @@ def validate_key(api_key, model):
         return False
     except Exception:
         return False                  # any other failure = treat as invalid
-#STEPS TO DO
-#Professor scoping in retrieval — add professor_id to the metadata filter so one professor's students never see another's courses (you have course_id filtering; add the professor layer).
-#The share-token flow — create_professor mints a token; get_professor_by_token resolves a link to a professor's id/key/model.
-#The web layer — this is the big one. Wrap your functions as endpoints: an upload/ingest endpoint for professors, a chat endpoint for students that streams over HTTP. Your streaming generator drops right into this. This is where it stops being a terminal script and becomes a real app with the public link.
-#The student interface — the actual page students land on via the link (anonymous, pick a course, chat).
-#Before going public — encrypt the stored API key, add per-link rate limiting, allow token rotation.

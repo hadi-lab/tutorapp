@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import "./auth.css"
 function StudentLogin(){
     const [email,setEmail]=useState("")
     const [password,setPassword]=useState("")
     const [result,setResult]=useState("")
     const navigate=useNavigate()
+    const [loading, setLoading] = useState(false)
 
 
     async function handleStudentLogin(){
+        setLoading(true)
         let response;
         try{
             response=await fetch("/api/student_login",{
@@ -18,9 +21,11 @@ function StudentLogin(){
         }
         catch(e){
             setResult("connection problem,please try again.")
+            setLoading(false)
             return
         }
         const data=await response.json()
+        setLoading(false)
         if(data.redirect){
             navigate(data.redirect)
         }
@@ -29,13 +34,37 @@ function StudentLogin(){
         }
     }
 
-    return(<div>
-        <input value={email} onChange={(e) => setEmail(e.target.value) } placeholder='email'/>
-        <input value={password} onChange={(e) => setPassword(e.target.value) } placeholder='password'/>
-        <button onClick={handleStudentLogin} >Log in</button>
-        <p>{result}</p>
-        <p>New? <Link to="/student_signup">Signup</Link></p>
-    </div>
+    return(
+        <div className="auth-container">
+            <div className="auth-card">
+                <h2 className="auth-heading">Student Login</h2>
+
+                <input
+                    className="auth-field"
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                />
+                <input
+                    className="auth-field"
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                />
+                {result && <p className="auth-error">{result}</p>} 
+                <button className="auth-button" onClick={handleStudentLogin} disabled={loading}>
+                    {loading ? <span className="spinner" /> : "Log in"}
+                </button>
+
+            <p className="auth-switch">
+                Don't have an account?{" "}
+                <span onClick={() => navigate("/student_signup")}>Sign up</span>
+            </p>
+            </div>
+        </div>
+
     )
 }
 export default StudentLogin
