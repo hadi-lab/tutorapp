@@ -22,7 +22,7 @@ collection=client.get_or_create_collection(name="courses")
 import sqlite3
 
 def init_db():
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS professors (
         professor_id     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +73,7 @@ def init_db():
     conn.close()
 
 def delete_course(course_id,prof_id):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     cur = conn.cursor()
     cur.execute("""DELETE FROM messages WHERE chat_id IN
                 (SELECT chat_id FROM conversations WHERE course_id = ?)""", (course_id,))
@@ -83,7 +83,7 @@ def delete_course(course_id,prof_id):
     conn.close()
     collection.delete(where={"course_id": course_id})
 def save_messages(chat_id,role,content):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute(
         
@@ -95,7 +95,7 @@ def save_messages(chat_id,role,content):
     conn.close()
 
 def get_history(chat_id):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute(
         "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY message_id",
@@ -106,7 +106,7 @@ def get_history(chat_id):
     return rows
 
 def course_belongs_to_prof(course_id,prof_id):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("""
         SELECT 1 FROM courses WHERE professor_id=? AND course_id=?
@@ -119,7 +119,7 @@ def course_belongs_to_prof(course_id,prof_id):
 
 
 def chat_belong_to_student(chat_id,s_id):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("SELECT 1 FROM conversations WHERE chat_id=? AND student_id=?",(chat_id,s_id))
     row=cur.fetchone()
@@ -167,7 +167,7 @@ def retrieve(question,k,Collection,embedder,course_id):
     return results
 
 def get_students_by_email(email):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("SELECT student_id,password_hash FROM students WHERE email = ?",(email,))
     row=cur.fetchone()
@@ -175,7 +175,7 @@ def get_students_by_email(email):
     return row
 
 def get_prof_by_email(email):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("SELECT professor_id,hashed_pass FROM professors WHERE  email=? ",(email,))
     row=cur.fetchone()
@@ -183,7 +183,7 @@ def get_prof_by_email(email):
     return row
 
 def get_token_by_prof_id(prof_id):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("SELECT share_link_token FROM professors WHERE professor_id =?",(prof_id,))
     row=cur.fetchone()
@@ -191,7 +191,7 @@ def get_token_by_prof_id(prof_id):
     return row[0] if row else None
 
 def create_conversation(student_id, course_id):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO conversations (student_id, course_id, title, created_at) VALUES (?, ?, ?, ?)",
@@ -266,7 +266,7 @@ def ask(question,chat_id,llm,k,collection,embedder,api_key,course_id):
 
 
 def create_course(title,prof_id):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     cur = conn.cursor()
     cur.execute("INSERT INTO courses (professor_id,title,created_at) VALUES (?,?,?)", (prof_id,title,datetime.now().isoformat()))
     course_id = cur.lastrowid  
@@ -276,7 +276,7 @@ def create_course(title,prof_id):
 
 
 def create_student(email,password_hash):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("INSERT INTO students(email,password_hash) VALUES (?,?)",(email,password_hash))
     student_id=cur.lastrowid
@@ -308,7 +308,7 @@ def get_professor_by_token(token):
     return row
 
 def get_user_chats(student_id):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     cur = conn.cursor()
     cur.execute("""
             SELECT c.chat_id,c.title,c.course_id,co.title  FROM  conversations c
@@ -322,7 +322,7 @@ def get_user_chats(student_id):
 
 def rotate_token(professor_id):
     new_token=secrets.token_urlsafe(32)
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("UPDATE professors SET share_link_token=? WHERE professor_id=?",(new_token,professor_id))
     conn.commit()
@@ -341,7 +341,7 @@ def get_professor_courses(prof_id):
     return rows
 
 def get_professor_for_chat(chat_id):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     cur = conn.cursor()
     cur.execute("""
         SELECT p.api_key, p.model
@@ -355,22 +355,22 @@ def get_professor_for_chat(chat_id):
     return row
 
 def get_title(c_id):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("SELECT title FROM courses WHERE course_id=?",(c_id,))
-    row=cur.fetchone
+    row=cur.fetchone()
     conn.close()
     return row[0] if row else None
 
 def insert_title(title,chat_id):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute("UPDATE conversations SET title=? WHERE chat_id=?",(title,chat_id))
     conn.commit()
     conn.close()
 
 def delete_chat(s_id,chat_id):
-    conn=sqlite3.connect(db_path)
+    conn=sqlite3.connect(db_path, timeout=10)
     cur=conn.cursor()
     cur.execute(" DELETE FROM messages WHERE chat_id=?",(chat_id,))
     cur.execute(" DELETE FROM conversations WHERE chat_id=?",(chat_id,))

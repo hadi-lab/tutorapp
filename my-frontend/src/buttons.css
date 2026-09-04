@@ -1,0 +1,33 @@
+.btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    font: inherit;
+    cursor: pointer;
+}
+.btn-primary {
+    background-color: #2563eb;
+    color: white;
+}
+.btn-primary:hover { background-color: #1d4ed8; }
+
+.btn-secondary {
+    background-color: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+}
+.btn-secondary:hover { background-color: #374151; }
+
+.btn-danger {
+    background-color: #374151;
+    color: #f3f4f6;
+}
+.btn-danger:hover { background-color: #dc2626; }
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #16171d;
+    padding: 4px 10px;
+    border-radius: 4px;
+}

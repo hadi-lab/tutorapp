@@ -1,19 +1,43 @@
 from flask import Flask,request, Response, jsonify,render_template,session,redirect,url_for
 import os
 import sqlite3
+from cryptography.fernet import Fernet
+
+def encrypt_key(plaintext):
+    return fernet.encrypt(plaintext.encode()).decode()
+
+def decrypt_key(ciphertext):
+    return fernet.decrypt(ciphertext.encode()).decode()
+
+
+app=Flask(__name__)
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(
+    get_remote_address,     
+    app=app,
+    default_limits=[]        
+)
+
 
 import rag_pipeline as rp
+from rag_pipeline import embedder, collection, openai_key, db_path
 from dotenv import load_dotenv
 
 from werkzeug.security import check_password_hash,generate_password_hash
 load_dotenv()
 
-app=Flask(__name__)
 app.secret_key=os.getenv("app_secret_key")
-from rag_pipeline import embedder, collection, openai_key, db_path
+fernet = Fernet(os.getenv("FERNET_KEY"))
 k=8
 
 from functools import wraps
+
+def student_key():
+    return str(session.get("student_id", get_remote_address()))
+
+
 
 def student_required(f):
     @wraps(f)
@@ -51,6 +75,7 @@ def ingest_course_files(files,prof_id,collection,course_title):
 
 @app.route("/api/chat",methods=["POST"])
 @student_required
+@limiter.limit("20 per minute", key_func=student_key)
 def ask_endpoint():
     question=request.json["question"]
     chat_id=request.json["chat_id"]
@@ -59,7 +84,7 @@ def ask_endpoint():
     if len(history) == 0:
         rp.insert_title(question[:40],chat_id)
     prof=rp.get_professor_for_chat(chat_id)
-    api_key = prof[0]      
+    api_key = decrypt_key(prof[0])      
     llm = prof[1] 
     def generate():
         full=""
@@ -117,6 +142,7 @@ def landing(token):
     return jsonify({"courses":course_list})
 
 @app.route("/api/student_signup",methods=["POST"])
+@limiter.limit("5 per minute")
 def student_route():
     if "pending_token" not in session:
         return jsonify({"error": "please use your professor's link to sign up"}), 400
@@ -132,6 +158,7 @@ def student_route():
 
 
 @app.route("/api/student_login",methods=["POST"])
+@limiter.limit("5 per minute")
 def s_login():
     
     data=request.json
@@ -154,13 +181,15 @@ def s_login():
 
 
 @app.route("/api/professor_signup",methods=["POST"])
+@limiter.limit("5 per minute")
 def professor_route():
     data=request.json
     if not rp.validate_key(data["api_key"],data["model"]):
         return jsonify({"error":"invalid key or model"}),400
     password=generate_password_hash(data["password"])
+    encrypted = encrypt_key(data["api_key"])
     try:
-        prof_id,token=rp.create_professor(data["name"],data["email"],password,data["api_key"],data["model"])
+        prof_id,token=rp.create_professor(data["name"],data["email"],password,encrypted,data["model"])
     except sqlite3.IntegrityError:
         return jsonify({"error": "email already registered"}), 400
     session["prof_id"]=prof_id
@@ -182,6 +211,7 @@ def rotate_prof_token():
     return jsonify({"new_token":new_token})
 
 @app.route("/api/professor_login",methods=["POST"])
+@limiter.limit("5 per minute")
 def p_login():
     data=request.json
     prof=rp.get_prof_by_email(data["email"])

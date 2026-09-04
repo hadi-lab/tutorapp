@@ -27,6 +27,8 @@ function StudentSignup(){
         }
         
         const data=await response.json()
+        if (response.status === 429) { setLoading(false); setResult("Slow down a moment — too many messages."); return }
+
         setLoading(false)
         if(data.redirect){
             navigate(data.redirect)

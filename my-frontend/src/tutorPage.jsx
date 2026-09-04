@@ -18,6 +18,8 @@ function TutorPage(){
     const [error, setError] = useState(null)
     const textareaRef = useRef(null)
     const [loading, setLoading] = useState(false)
+    const currentCourse = courses.find(c => c.course_id === currentCourseId)
+
 
     useEffect(() => {
         const el = textareaRef.current
@@ -116,7 +118,7 @@ function TutorPage(){
                 return
             }
             if (response.status === 401) { setLoading(false);navigate("/student_login"); return }
-
+            if (response.status === 429) { setLoading(false); showError("Slow down a moment — too many messages."); return }
             setMessages(prev => [...prev, { role: "assistant", content: "" }])
 
             const reader = response.body.getReader()
@@ -197,7 +199,7 @@ function TutorPage(){
                     {messages.length === 0 ? (
                         <div className="empty-state">
                             {currentChatId
-                                ? "New chat started — ask your first question below!"
+                                ? `New chat started about ${currentCourse?.title} — ask your first question below!`
                                 : "Pick a course to start chatting."}
                         </div>
                     ) : (

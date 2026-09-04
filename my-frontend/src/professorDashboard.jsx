@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Link , useNavigate} from 'react-router-dom'
+import "./dashboard.css"
+import "./buttons.css"
 function ProfessorDashboard(){
     const [courses,setCourses]=useState([])
     const [token,setToken]=useState("")
     const [courseTitle,setCoursetitle]=useState("")
-    const [files,setFiles]=useState(null)
+    const [files,setFiles]=useState([])
     const [fileInputKey, setFileInputKey] = useState(0)
     const navigate=useNavigate()
+    const [result,setResult]=useState("")
+
+    function handleFileChange(e) {
+    const picked = Array.from(e.target.files)
+    setFiles(prev => [...prev, ...picked])      
+    }
 
     useEffect(()=>{
         async function loadData(){
@@ -39,12 +47,12 @@ function ProfessorDashboard(){
         try{
             response=await fetch("/api/ingest",{method:"POST",body:formdata})
         }
-        catch(e){return}
+        catch(e){setResult("Upload failed, please try again.");return}
         if(response.status===401){navigate("/login");return}
         const data=await response.json()
         setCourses([...courses,{course_id:data.course_id,title: courseTitle}])
         setCoursetitle("")
-        setFiles(null)
+        setFiles([])
         setFileInputKey(prev => prev + 1)
 
     }
@@ -83,26 +91,51 @@ function ProfessorDashboard(){
         navigate("/login")
     }
     return(
-        <div>
-            <button onClick={logout} >logout.</button>
-            
-            <h3>Your share link:</h3>
-            <p>{window.location.origin}/tutor/{token}</p>
-            
-            <button onClick={rotateToken} >Rotate Token?</button>
+        <div className='dashboard-container'>
 
-            <h3>Your courses:</h3>
-            <ul>
-                {courses.map(c =>(
-                    <li key={c.course_id} >{c.title}
-                    <button onClick={() => deleteCourse(c.course_id)} >Delete</button>
+            <div className="dashboard-header">
+                <h1 className="dashboard-title">Dashboard</h1>
+                <button className="btn btn-secondary" onClick={logout}>Logout</button>
+                <p>{result}</p>
+            </div>
+            <div className="dashboard-card">
+                <h3>Your share link</h3>
+                <p className="share-link">{window.location.origin}/tutor/{token}</p>
+                <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/tutor/${token}`)}>
+                Copy
+                </button>
+                <button className="btn btn-secondary" onClick={rotateToken}>Rotate Token</button>
+            </div>
+
+            <div className='dasboard-card'>
+
+                <h3>Your courses:</h3>
+                <ul className='course-list'>
+                    {courses.map(c =>(
+                        <li className='course-item' key={c.course_id} ><span>{c.title}</span>
+                        <button className="btn btn-danger" onClick={() => deleteCourse(c.course_id)} >Delete</button>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <div className="dashboard-card">
+                <h3>Add a course</h3>
+                <input className="auth-field" value={courseTitle} onChange={(e) => setCoursetitle(e.target.value)} placeholder="Course title" />
+                <input key={fileInputKey} type="file" multiple onChange={handleFileChange} />
+
+                {files.length > 0 && (
+                <ul className="file-list">
+                    {files.map((file, i) => (
+                    <li key={i} className="file-item">
+                    <span>{file.name}</span>
+                    <button className="btn btn-danger" onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}>✕</button>
                     </li>
-                ))}
-            </ul>
-            <h3>Add a course:</h3>
-            <input value={courseTitle} onChange={(e) => setCoursetitle(e.target.value)} placeholder='course title' />
-            <input key={fileInputKey} type="file" multiple onChange={(e)=> setFiles(e.target.files)}/>
-            <button onClick={uploadCourse} >Upload course</button>
+                    ))}
+                </ul>
+                )}
+                <button className="btn btn-primary" onClick={uploadCourse}>Upload course</button>
+            </div>
 
 
         </div>
