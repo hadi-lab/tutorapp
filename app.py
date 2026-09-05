@@ -1,6 +1,6 @@
-from flask import Flask,request, Response, jsonify,render_template,session,redirect,url_for
+from flask import Flask,request, Response, jsonify,session,send_from_directory
 import os
-import sqlite3
+import psycopg
 from cryptography.fernet import Fernet
 
 def encrypt_key(plaintext):
@@ -10,7 +10,7 @@ def decrypt_key(ciphertext):
     return fernet.decrypt(ciphertext.encode()).decode()
 
 
-app=Flask(__name__)
+app=Flask(__name__, static_folder=None)
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -22,7 +22,7 @@ limiter = Limiter(
 
 
 import rag_pipeline as rp
-from rag_pipeline import embedder, collection, openai_key, db_path
+from rag_pipeline import embedder, collection
 from dotenv import load_dotenv
 
 from werkzeug.security import check_password_hash,generate_password_hash
@@ -70,6 +70,9 @@ def ingest_course_files(files,prof_id,collection,course_title):
         file.save(path)
         add_file_to_course(path,course_id,collection,file_id)
     return course_id
+
+
+
 
 
 
@@ -150,7 +153,7 @@ def student_route():
     password=generate_password_hash(data["password"])
     try:
         id=rp.create_student(data["email"],password)
-    except sqlite3.IntegrityError:
+    except psycopg.errors.UniqueViolation:
         return jsonify({"error": "email already registered"}), 400
     session["student_id"]=id
     token=session.pop("pending_token")
@@ -190,7 +193,7 @@ def professor_route():
     encrypted = encrypt_key(data["api_key"])
     try:
         prof_id,token=rp.create_professor(data["name"],data["email"],password,encrypted,data["model"])
-    except sqlite3.IntegrityError:
+    except psycopg.errors.UniqueViolation:
         return jsonify({"error": "email already registered"}), 400
     session["prof_id"]=prof_id
     return jsonify({"redirect":"/professor_dashboard"})
@@ -282,6 +285,22 @@ def upload():
 def logout():
     session.clear()
     return jsonify({"status": "logged out"})
+
+
+DIST = os.path.join(os.path.dirname(__file__), "my-frontend", "dist")
+
+@app.route("/")
+def serve_index():
+    return send_from_directory(DIST, "index.html")
+
+
+@app.route("/<path:path>")
+def serve_react(path):
+    full_path = os.path.join(DIST, path)
+    if os.path.isfile(full_path):
+        return send_from_directory(DIST, path)
+    return send_from_directory(DIST, "index.html")
+
 
 rp.init_db()
 app.run(debug=True)

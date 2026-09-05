@@ -37,6 +37,10 @@ function TutorPage(){
                 navigate(d.redirect)
                 return
             }
+            if (r1.status === 404) {
+                navigate("/student_login", { state: { message: "This course link has changed. Please ask your professor for the new link." } })
+                return
+            }
             const coursedata=await r1.json()
             setCourses(coursedata.courses)
             

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate} from 'react-router-dom'
+import { useNavigate} from 'react-router-dom'
 import "./auth.css"
 
 function ProfessorSignup() {
@@ -28,8 +28,8 @@ function ProfessorSignup() {
       return
     }
 
+    if (response.status === 429) { setLoading(false); setResult("Too many attempts — please wait a moment."); return }
     const data = await response.json()
-    if (response.status === 429) { setLoading(false); setResult("Slow down a moment — too many messages."); return }
     setLoading(false)
     if (data.redirect) {
       navigate(data.redirect)

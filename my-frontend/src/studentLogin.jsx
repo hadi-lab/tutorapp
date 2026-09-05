@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate,useLocation  } from 'react-router-dom'
 import "./auth.css"
 function StudentLogin(){
     const [email,setEmail]=useState("")
     const [password,setPassword]=useState("")
-    const [result,setResult]=useState("")
     const navigate=useNavigate()
     const [loading, setLoading] = useState(false)
-
+    const location = useLocation()
+    const [result,setResult]=useState(location.state?.message ||"")
 
     async function handleStudentLogin(){
         setLoading(true)
@@ -24,8 +24,8 @@ function StudentLogin(){
             setLoading(false)
             return
         }
+        if (response.status === 429) { setLoading(false);setResult("Too many login attempts — please wait a moment."); return }
         const data=await response.json()
-        if (response.status === 429) { setLoading(false); setResult("Slow down a moment — too many messages."); return }
 
         setLoading(false)
         if(data.redirect){
@@ -64,6 +64,7 @@ function StudentLogin(){
                 Don't have an account?{" "}
                 <span onClick={() => navigate("/student_signup")}>Sign up</span>
             </p>
+            
             </div>
         </div>
 

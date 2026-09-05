@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import "./auth.css"
 
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 function StudentSignup(){
     const [email,setEmail]=useState("")
     const [password,setPassword]=useState("")
@@ -26,8 +26,8 @@ function StudentSignup(){
             return
         }
         
+        if (response.status === 429) { setLoading(false); setResult("Too many attempts — please wait a moment."); return }
         const data=await response.json()
-        if (response.status === 429) { setLoading(false); setResult("Slow down a moment — too many messages."); return }
 
         setLoading(false)
         if(data.redirect){
@@ -64,7 +64,7 @@ function StudentSignup(){
                 </button>
 
             <p className="auth-switch">
-                have an account?{" "}
+                Have an account?{" "}
                 <span onClick={() => navigate("/student_login")}>log in</span>
             </p>
             </div>

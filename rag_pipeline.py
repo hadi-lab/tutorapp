@@ -1,31 +1,31 @@
 from sentence_transformers import SentenceTransformer
-import numpy as np
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from litellm import completion
 import os
+import psycopg
 import chromadb
-import sqlite3
 from dotenv import load_dotenv
 from datetime import datetime
 import secrets
 from litellm.exceptions import AuthenticationError
 embedder=SentenceTransformer("all-MiniLM-L6-v2")
-db_path="app.db"
 load_dotenv()
 openai_key=os.getenv("OPENAI_API_KEY")
+db_path=os.getenv("DATABASE_URL")
 
 
 client=chromadb.PersistentClient("./chroma_db")
 collection=client.get_or_create_collection(name="courses")
 
-import sqlite3
 
 def init_db():
-    conn = sqlite3.connect(db_path, timeout=10)
-    conn.executescript("""
+    conn = psycopg.connect(db_path)
+    cur=conn.cursor()
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS professors (
-        professor_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+        professor_id     SERIAL PRIMARY KEY ,
         email TEXT UNIQUE,
         hashed_pass TEXT,
         name       TEXT,
@@ -35,7 +35,7 @@ def init_db():
         );
 
         CREATE TABLE IF NOT EXISTS courses (
-        course_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_id  SERIAL PRIMARY KEY ,
         professor_id INTEGER,
         title      TEXT,
         created_at TEXT,
@@ -43,14 +43,14 @@ def init_db():
         );
 
         CREATE TABLE IF NOT EXISTS students (
-            student_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id     SERIAL PRIMARY KEY ,
             email          TEXT UNIQUE,
             password_hash  TEXT
         );
 
 
         CREATE TABLE IF NOT EXISTS conversations (
-            chat_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id     SERIAL PRIMARY KEY ,
             student_id   INTEGER,
             course_id   INTEGER,
             title       TEXT,
@@ -61,7 +61,7 @@ def init_db():
         
 
         CREATE TABLE IF NOT EXISTS messages (
-            message_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id  SERIAL PRIMARY KEY ,
             chat_id     INTEGER,
             role        TEXT,
             content     TEXT,
@@ -73,21 +73,21 @@ def init_db():
     conn.close()
 
 def delete_course(course_id,prof_id):
-    conn = sqlite3.connect(db_path, timeout=10)
+    conn = psycopg.connect(db_path)
     cur = conn.cursor()
     cur.execute("""DELETE FROM messages WHERE chat_id IN
-                (SELECT chat_id FROM conversations WHERE course_id = ?)""", (course_id,))
-    cur.execute("DELETE FROM conversations WHERE course_id = ?", (course_id,))
-    cur.execute("DELETE FROM courses WHERE course_id = ? AND professor_id=?", (course_id,prof_id))
+                (SELECT chat_id FROM conversations WHERE course_id = %s)""", (course_id,))
+    cur.execute("DELETE FROM conversations WHERE course_id = %s", (course_id,))
+    cur.execute("DELETE FROM courses WHERE course_id = %s AND professor_id=%s", (course_id,prof_id))
     conn.commit()
     conn.close()
     collection.delete(where={"course_id": course_id})
 def save_messages(chat_id,role,content):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
     cur.execute(
         
-        "INSERT INTO messages (chat_id,role,content,timestamp) VALUES (? ,? ,? ,?)",
+        "INSERT INTO messages (chat_id,role,content,timestamp) VALUES (%s ,%s ,%s ,%s)",
         (chat_id,role,content,datetime.now().isoformat())
         
     )
@@ -95,10 +95,10 @@ def save_messages(chat_id,role,content):
     conn.close()
 
 def get_history(chat_id):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
     cur.execute(
-        "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY message_id",
+        "SELECT role, content FROM messages WHERE chat_id = %s ORDER BY message_id",
         (chat_id,)
     )
     rows=cur.fetchall()
@@ -106,10 +106,10 @@ def get_history(chat_id):
     return rows
 
 def course_belongs_to_prof(course_id,prof_id):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
     cur.execute("""
-        SELECT 1 FROM courses WHERE professor_id=? AND course_id=?
+        SELECT 1 FROM courses WHERE professor_id=%s AND course_id=%s
         """,(prof_id,course_id))
     row=cur.fetchone()
     conn.close()
@@ -119,9 +119,9 @@ def course_belongs_to_prof(course_id,prof_id):
 
 
 def chat_belong_to_student(chat_id,s_id):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("SELECT 1 FROM conversations WHERE chat_id=? AND student_id=?",(chat_id,s_id))
+    cur.execute("SELECT 1 FROM conversations WHERE chat_id=%s AND student_id=%s",(chat_id,s_id))
     row=cur.fetchone()
     conn.close()
     return row is not None
@@ -167,37 +167,37 @@ def retrieve(question,k,Collection,embedder,course_id):
     return results
 
 def get_students_by_email(email):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("SELECT student_id,password_hash FROM students WHERE email = ?",(email,))
+    cur.execute("SELECT student_id,password_hash FROM students WHERE email = %s",(email,))
     row=cur.fetchone()
     conn.close()
     return row
 
 def get_prof_by_email(email):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("SELECT professor_id,hashed_pass FROM professors WHERE  email=? ",(email,))
+    cur.execute("SELECT professor_id,hashed_pass FROM professors WHERE  email=%s ",(email,))
     row=cur.fetchone()
     conn.close()
     return row
 
 def get_token_by_prof_id(prof_id):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("SELECT share_link_token FROM professors WHERE professor_id =?",(prof_id,))
+    cur.execute("SELECT share_link_token FROM professors WHERE professor_id =%s",(prof_id,))
     row=cur.fetchone()
     conn.close()
     return row[0] if row else None
 
 def create_conversation(student_id, course_id):
-    conn = sqlite3.connect(db_path, timeout=10)
+    conn = psycopg.connect(db_path)
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO conversations (student_id, course_id, title, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO conversations (student_id, course_id, title, created_at) VALUES (%s, %s, %s, %s) RETURNING chat_id",
         (student_id, course_id, None, datetime.now().isoformat())
     )
-    chat_id = cur.lastrowid          
+    chat_id = cur.fetchone()[0]          
     conn.commit()
     conn.close()
     return chat_id
@@ -266,54 +266,54 @@ def ask(question,chat_id,llm,k,collection,embedder,api_key,course_id):
 
 
 def create_course(title,prof_id):
-    conn = sqlite3.connect(db_path, timeout=10)
+    conn = psycopg.connect(db_path)
     cur = conn.cursor()
-    cur.execute("INSERT INTO courses (professor_id,title,created_at) VALUES (?,?,?)", (prof_id,title,datetime.now().isoformat()))
-    course_id = cur.lastrowid  
+    cur.execute("INSERT INTO courses (professor_id,title,created_at) VALUES (%s,%s,%s) RETURNING course_id", (prof_id,title,datetime.now().isoformat()))
+    course_id = cur.fetchone()[0]  
     conn.commit()
     conn.close()
     return course_id 
 
 
 def create_student(email,password_hash):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("INSERT INTO students(email,password_hash) VALUES (?,?)",(email,password_hash))
-    student_id=cur.lastrowid
+    cur.execute("INSERT INTO students(email,password_hash) VALUES (%s,%s) RETURNING student_id",(email,password_hash))
+    student_id=cur.fetchone()[0]
     conn.commit()
     conn.close()
     return student_id
 
 def create_professor(name,email,hashed_pass,api_key,model):
     token=secrets.token_urlsafe(32)
-    conn=sqlite3.connect(db_path)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
     cur.execute(
-            "INSERT INTO professors(name,email,hashed_pass,api_key,model,share_link_token) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO professors(name,email,hashed_pass,api_key,model,share_link_token) VALUES (%s,%s,%s,%s,%s,%s) RETURNING professor_id",
             (name,email,hashed_pass,api_key,model,token)
     )
-    professor_id=cur.lastrowid
+    professor_id=cur.fetchone()[0]
     conn.commit()
     conn.close()
     return professor_id,token
 
 def get_professor_by_token(token):
-    conn=sqlite3.connect(db_path)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
     cur.execute(
-        "SELECT professor_id,api_key,model FROM professors WHERE share_link_token=?",(token,)
+        "SELECT professor_id,api_key,model FROM professors WHERE share_link_token=%s",(token,)
     )
     row=cur.fetchone()
     conn.close()
     return row
 
 def get_user_chats(student_id):
-    conn = sqlite3.connect(db_path, timeout=10)
+    conn = psycopg.connect(db_path)
     cur = conn.cursor()
     cur.execute("""
             SELECT c.chat_id,c.title,c.course_id,co.title  FROM  conversations c
             JOIN courses co ON c.course_id=co.course_id
-            WHERE c.student_id=? AND c.title IS NOT NULL
+            WHERE c.student_id=%s AND c.title IS NOT NULL
             ORDER BY c.created_at DESC
             """,(student_id,))
     rows = cur.fetchall()
@@ -322,18 +322,18 @@ def get_user_chats(student_id):
 
 def rotate_token(professor_id):
     new_token=secrets.token_urlsafe(32)
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("UPDATE professors SET share_link_token=? WHERE professor_id=?",(new_token,professor_id))
+    cur.execute("UPDATE professors SET share_link_token=%s WHERE professor_id=%s",(new_token,professor_id))
     conn.commit()
     conn.close()
     return new_token
 
 def get_professor_courses(prof_id):
-    conn = sqlite3.connect(db_path)
+    conn = psycopg.connect(db_path)
     cur = conn.cursor()
     cur.execute(
-        "SELECT course_id, title FROM courses WHERE professor_id = ?",
+        "SELECT course_id, title FROM courses WHERE professor_id = %s",
         (prof_id,)
     )
     rows = cur.fetchall()
@@ -341,39 +341,39 @@ def get_professor_courses(prof_id):
     return rows
 
 def get_professor_for_chat(chat_id):
-    conn = sqlite3.connect(db_path, timeout=10)
+    conn = psycopg.connect(db_path)
     cur = conn.cursor()
     cur.execute("""
         SELECT p.api_key, p.model
         FROM conversations c
         JOIN courses co ON c.course_id = co.course_id
         JOIN professors p ON co.professor_id = p.professor_id
-        WHERE c.chat_id = ?
+        WHERE c.chat_id = %s
     """, (chat_id,))
     row = cur.fetchone()
     conn.close()
     return row
 
 def get_title(c_id):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("SELECT title FROM courses WHERE course_id=?",(c_id,))
+    cur.execute("SELECT title FROM courses WHERE course_id=%s",(c_id,))
     row=cur.fetchone()
     conn.close()
     return row[0] if row else None
 
 def insert_title(title,chat_id):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute("UPDATE conversations SET title=? WHERE chat_id=?",(title,chat_id))
+    cur.execute("UPDATE conversations SET title=%s WHERE chat_id=%s",(title,chat_id))
     conn.commit()
     conn.close()
 
 def delete_chat(s_id,chat_id):
-    conn=sqlite3.connect(db_path, timeout=10)
+    conn=psycopg.connect(db_path)
     cur=conn.cursor()
-    cur.execute(" DELETE FROM messages WHERE chat_id=?",(chat_id,))
-    cur.execute(" DELETE FROM conversations WHERE chat_id=?",(chat_id,))
+    cur.execute(" DELETE FROM messages WHERE chat_id=%s",(chat_id,))
+    cur.execute(" DELETE FROM conversations WHERE chat_id=%s",(chat_id,))
     conn.commit()
     conn.close()
 
@@ -384,10 +384,10 @@ def validate_key(api_key, model):
             model=model,
             api_key=api_key,
             messages=[{"role": "user", "content": "test"}],
-            max_tokens=1              # keep it tiny/cheap
+            max_tokens=1              
         )
         return True
     except AuthenticationError:
         return False
     except Exception:
-        return False                  # any other failure = treat as invalid
+        return False                  
