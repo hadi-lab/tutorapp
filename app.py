@@ -278,7 +278,15 @@ def upload():
     course_id=ingest_course_files(material,prof_id,collection,course_title)
     return jsonify({"course_id":course_id})
 
-
+@app.route("/api/retrieve_questions", methods=["POST"])
+@prof_required
+def retrieve_questions():
+    data=request.json
+    course_id=data['course_id']
+    if not rp.course_belongs_to_prof(course_id, session["prof_id"]):
+        return jsonify({"error": "not your course"}), 403
+    questions=rp.get_course_questions(course_id)
+    return jsonify({"questions":questions})
 
 
 @app.route("/api/logout", methods=["POST"])

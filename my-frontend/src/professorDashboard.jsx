@@ -7,6 +7,7 @@ function ProfessorDashboard(){
     const [token,setToken]=useState("")
     const [courseTitle,setCoursetitle]=useState("")
     const [files,setFiles]=useState([])
+    const [uploading, setUploading] = useState(false)
     const [fileInputKey, setFileInputKey] = useState(0)
     const navigate=useNavigate()
     const [result,setResult]=useState("")
@@ -38,6 +39,10 @@ function ProfessorDashboard(){
 
 
     async function uploadCourse() {
+        if (!courseTitle.trim()) { setResult("Please enter a course title."); return }
+        if (files.length === 0) { setResult("Please add at least one file."); return }
+        if (courseTitle.length > 50) { setResult("Course title is too long (max 50 characters)."); return }
+        setUploading(true)
         const formdata=new FormData()
         formdata.append("course_title",courseTitle)
         for(let i =0;i<files.length;i++){
@@ -47,14 +52,14 @@ function ProfessorDashboard(){
         try{
             response=await fetch("/api/ingest",{method:"POST",body:formdata})
         }
-        catch(e){setResult("Upload failed, please try again.");return}
-        if(response.status===401){navigate("/login");return}
+        catch(e){setUploading(false);setResult("Upload failed, please try again.");return}
+        if(response.status===401){setUploading(false);navigate("/login");return}
         const data=await response.json()
         setCourses([...courses,{course_id:data.course_id,title: courseTitle}])
         setCoursetitle("")
         setFiles([])
         setFileInputKey(prev => prev + 1)
-
+        setUploading(false)
     }
     async function deleteCourse(course_id) {
         if(!confirm("Delete this course?This cannot be undone.")){
@@ -69,6 +74,7 @@ function ProfessorDashboard(){
             })
         }
         catch(e){
+            
             return
         }
         if(response.status===401){navigate("/login");return}
@@ -96,7 +102,6 @@ function ProfessorDashboard(){
             <div className="dashboard-header">
                 <h1 className="dashboard-title">Dashboard</h1>
                 <button className="btn btn-secondary" onClick={logout}>Logout</button>
-                <p>{result}</p>
             </div>
             <div className="dashboard-card">
                 <h3>Your share link</h3>
@@ -107,13 +112,16 @@ function ProfessorDashboard(){
                 <button className="btn btn-secondary" onClick={rotateToken}>Rotate Token</button>
             </div>
 
-            <div className='dasboard-card'>
+            <div className='dashboard-card'>
 
                 <h3>Your courses:</h3>
                 <ul className='course-list'>
                     {courses.map(c =>(
                         <li className='course-item' key={c.course_id} ><span>{c.title}</span>
                         <button className="btn btn-danger" onClick={() => deleteCourse(c.course_id)} >Delete</button>
+                        <button className="btn btn-secondary" onClick={() => navigate("/course_questions/" + c.course_id)}>
+                            View questions
+                        </button>
                         </li>
                     ))}
                 </ul>
@@ -121,7 +129,7 @@ function ProfessorDashboard(){
 
             <div className="dashboard-card">
                 <h3>Add a course</h3>
-                <input className="auth-field" value={courseTitle} onChange={(e) => setCoursetitle(e.target.value)} placeholder="Course title" />
+                <input className="auth-field" maxLength={50} value={courseTitle} onChange={(e) => setCoursetitle(e.target.value)} placeholder="Course title" />
                 <input key={fileInputKey} type="file" multiple onChange={handleFileChange} />
 
                 {files.length > 0 && (
@@ -134,7 +142,11 @@ function ProfessorDashboard(){
                     ))}
                 </ul>
                 )}
-                <button className="btn btn-primary" onClick={uploadCourse}>Upload course</button>
+                {result && <p className="dashboard-error">{result}</p>}
+                <button className="btn btn-primary" onClick={uploadCourse} disabled={uploading}>
+                    {uploading ? <span className="spinner" /> : "Upload course"}
+                </button>
+                
             </div>
 
 

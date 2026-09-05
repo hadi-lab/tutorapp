@@ -378,6 +378,22 @@ def delete_chat(s_id,chat_id):
     conn.close()
 
 
+
+def get_course_questions(course_id):
+    conn=psycopg.connect(db_path)
+    cur=conn.cursor()
+    cur.execute("""
+        SELECT m.content, m.timestamp
+        FROM messages m
+        JOIN conversations c ON m.chat_id = c.chat_id
+        WHERE c.course_id=%s AND m.role='user'
+        ORDER BY m.timestamp DESC
+        """,(course_id,))
+    rows=cur.fetchall()
+    conn.close()
+    return rows
+
+
 def validate_key(api_key, model):
     try:
         completion(
