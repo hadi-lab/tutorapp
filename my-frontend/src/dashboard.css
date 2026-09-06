@@ -51,6 +51,7 @@
     padding: 8px 12px;
     background-color: #16171d;
     border-radius: 6px;
+    gap: 8px;
 }
 
 .course-item span {
