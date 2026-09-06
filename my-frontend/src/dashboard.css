@@ -60,6 +60,9 @@
     white-space: nowrap;       
 }
 
+.course-item button {
+    flex-shrink: 0;    
+}
 .question-list {
     list-style: none;
     padding: 0;

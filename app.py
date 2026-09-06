@@ -22,7 +22,7 @@ limiter = Limiter(
 
 
 import rag_pipeline as rp
-from rag_pipeline import embedder, collection
+from rag_pipeline import embedder
 from dotenv import load_dotenv
 
 from werkzeug.security import check_password_hash,generate_password_hash
@@ -54,21 +54,21 @@ def prof_required(f):
             return jsonify({"error": "not logged in"}), 401
         return f(*args, **kwargs)
     return wrapper
-def add_file_to_course(pdf, course_id, collection,file_id):
+
+def add_file_to_course(pdf, course_id):
     pages = rp.extract_pages(pdf)
     chunks = rp.chunking(pages)
     embedded = rp.embedding(chunks)
-    rp.store_to_db(embedded, collection, course_id,file_id)    
+    rp.store_to_db(embedded,  course_id)    
     return len(embedded)
 
-def ingest_course_files(files,prof_id,collection,course_title):
+def ingest_course_files(files,prof_id,course_title):
     course_id=rp.create_course(course_title,prof_id)
     os.makedirs(f"./uploads/{prof_id}", exist_ok=True)
     for file in files:
-        file_id=os.path.splitext(file.filename)[0]
         path=f"./uploads/{prof_id}/{file.filename}"
         file.save(path)
-        add_file_to_course(path,course_id,collection,file_id)
+        add_file_to_course(path,course_id)
     return course_id
 
 
@@ -91,7 +91,7 @@ def ask_endpoint():
     llm = prof[1] 
     def generate():
         full=""
-        for piece in rp.answer(question, k, chat_id, llm, collection, embedder, api_key, course_id):
+        for piece in rp.answer(question, k, chat_id, llm, embedder, api_key, course_id):
             full+=piece
             yield piece
         
@@ -275,7 +275,7 @@ def upload():
     prof_id=session["prof_id"]  
     course_title=request.form["course_title"]
     material=request.files.getlist("files")
-    course_id=ingest_course_files(material,prof_id,collection,course_title)
+    course_id=ingest_course_files(material,prof_id,course_title)
     return jsonify({"course_id":course_id})
 
 @app.route("/api/retrieve_questions", methods=["POST"])
