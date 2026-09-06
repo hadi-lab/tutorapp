@@ -11,7 +11,7 @@ import secrets
 from litellm.exceptions import AuthenticationError
 embedder=SentenceTransformer("all-MiniLM-L6-v2")
 load_dotenv()
-openai_key=os.getenv("OPENAI_API_KEY")
+
 db_path=os.getenv("DATABASE_URL")
 
 

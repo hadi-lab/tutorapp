@@ -9,6 +9,5 @@ chroma_db/
 uploads/
 
 my-frontend/node_modules/
-my-frontend/dist/
 
 .DS_Store
