@@ -25,7 +25,7 @@ def get_conn():
     return conn
 
 def init_db():
-    conn = get_conn()
+    conn = psycopg.connect(db_path)
     cur=conn.cursor()
     cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 

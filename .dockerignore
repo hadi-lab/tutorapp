@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+app.db
+chroma_db/
+uploads/
+Hashing.pdf
+test.py
+test_routes.py
+tempCodeRunnerFile.py
+my-frontend/node_modules
+my-frontend/dist
